@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Player, MatchPreview, MatchmakingMode, Match, Session } from '../types';
-import { generateMatches, generateId } from '../utils/matchmaking';
+import { generateMatches, generateMatchesWithDuplicatePrevention, generateId, calculateMatchQuality, getQualityRating } from '../utils/matchmaking';
 import { 
   Target, 
   Dice6, 
@@ -30,7 +30,8 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
 
   const today = new Date().toISOString().split('T')[0];
   const availablePlayers = state.players.filter(p => p.availability.includes(today));
-  const canGenerate = availablePlayers.length >= 16;
+  const canGenerate = availablePlayers.length >= 4 && availablePlayers.length % 4 === 0;
+  const maxPlayers = Math.floor(availablePlayers.length / 4) * 4; // Use largest multiple of 4
 
   const algorithms = [
     {
@@ -62,7 +63,9 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
   // Generate matches with selected algorithm
   const handleGenerateMatches = async (mode: MatchmakingMode) => {
     if (!canGenerate) {
-      toast.error(`Need 16 players available today. Currently: ${availablePlayers.length}/16`);
+      const remainder = availablePlayers.length % 4;
+      const needed = remainder === 0 ? 0 : 4 - remainder;
+      toast.error(`Need players in multiples of 4 (minimum 4). Currently: ${availablePlayers.length}${needed > 0 ? `, need ${needed} more` : ''}`);
       return;
     }
 
@@ -71,11 +74,16 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
     setShuffleCount(1);
 
     try {
-      // Use first 16 available players
-      const playersToUse = availablePlayers.slice(0, 16);
-      const matches = generateMatches(playersToUse, mode);
+      // Use maximum available players (multiple of 4)
+      const playersToUse = availablePlayers.slice(0, maxPlayers);
+      
+      // Use enhanced matchmaking with duplicate prevention
+      const matches = generateMatchesWithDuplicatePrevention(playersToUse, mode);
       setMatchPreview(matches);
-      toast.success(`Generated matches using ${algorithms.find(a => a.id === mode)?.title}!`);
+      
+      const matchCount = matches.length;
+      const courtText = matchCount === 1 ? 'court' : 'courts';
+      toast.success(`Generated ${matchCount} match${matchCount > 1 ? 'es' : ''} on ${matchCount} ${courtText} using ${algorithms.find(a => a.id === mode)?.title} with duplicate prevention!`);
     } catch (error) {
       toast.error('Failed to generate matches. Please try again.');
       console.error('Match generation error:', error);
@@ -92,10 +100,11 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
     setShuffleCount(prev => prev + 1);
 
     try {
-      const playersToUse = availablePlayers.slice(0, 16);
-      const matches = generateMatches(playersToUse, selectedMode);
+      const playersToUse = availablePlayers.slice(0, maxPlayers);
+      // Use enhanced matchmaking with duplicate prevention for regeneration too
+      const matches = generateMatchesWithDuplicatePrevention(playersToUse, selectedMode);
       setMatchPreview(matches);
-      toast.success(`Shuffled again! (${shuffleCount + 1}/5)`);
+      toast.success(`Shuffled again with fresh combinations! (${shuffleCount + 1}/5)`);
     } catch (error) {
       toast.error('Failed to regenerate matches. Please try again.');
     } finally {
@@ -125,7 +134,7 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
       const session: Session = {
         id: generateId(),
         date: today,
-        availablePlayers: availablePlayers.slice(0, 16).map(p => p.id),
+        availablePlayers: availablePlayers.slice(0, maxPlayers).map(p => p.id),
         matches: [],
         status: 'active',
         tiers: {
@@ -185,7 +194,7 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Match Maker</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Generate balanced teams using smart algorithms
+          Generate balanced teams using smart algorithms with duplicate prevention
         </p>
       </div>
 
@@ -198,10 +207,15 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
             </div>
             <div className="ml-4">
               <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                Available Players: {availablePlayers.length}/16
+                Available Players: {availablePlayers.length} ({maxPlayers} will be used)
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {canGenerate ? 'Ready to generate matches!' : `Need ${16 - availablePlayers.length} more players`}
+                {canGenerate 
+                  ? `Ready to generate ${Math.floor(maxPlayers / 4)} match${Math.floor(maxPlayers / 4) > 1 ? 'es' : ''}!` 
+                  : availablePlayers.length < 4 
+                    ? `Need at least 4 players (currently: ${availablePlayers.length})`
+                    : `Need ${4 - (availablePlayers.length % 4)} more players for balanced teams`
+                }
               </p>
             </div>
           </div>
@@ -394,38 +408,116 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
             })}
           </div>
 
-          {/* Summary Stats */}
+          {/* Match Quality Analytics */}
           <div className="card p-6 mt-6">
-            <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Match Summary</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {matchPreview.filter(m => {
-                    const diff = Math.abs(m.teamA.combinedSkill - m.teamB.combinedSkill);
-                    return diff <= 5;
-                  }).length}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Perfectly Balanced</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                  {matchPreview.filter(m => {
-                    const diff = Math.abs(m.teamA.combinedSkill - m.teamB.combinedSkill);
-                    return diff > 5 && diff <= 10;
-                  }).length}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Good Matches</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                  {matchPreview.filter(m => {
-                    const diff = Math.abs(m.teamA.combinedSkill - m.teamB.combinedSkill);
-                    return diff > 10;
-                  }).length}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Unbalanced</p>
-              </div>
-            </div>
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Match Quality Analytics</h4>
+            
+            {(() => {
+              const quality = calculateMatchQuality(matchPreview);
+              const overallRating = getQualityRating(quality.overallScore);
+              const balanceRating = getQualityRating(quality.balanceScore);
+              const freshnessRating = getQualityRating(quality.freshnessScore);
+              
+              return (
+                <div className="space-y-6">
+                  {/* Overall Quality Score */}
+                  <div className="text-center">
+                    <div className={`inline-block px-4 py-2 rounded-full ${overallRating.bgColor} ${overallRating.color} mb-2`}>
+                      <span className="text-lg font-bold">{quality.overallScore}/100</span>
+                      <span className="ml-2 text-sm">{overallRating.text}</span>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Overall Match Quality</p>
+                  </div>
+
+                  {/* Detailed Metrics */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Balance Metrics */}
+                    <div>
+                      <h5 className="font-medium text-gray-900 dark:text-white mb-3">Team Balance</h5>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Balance Score:</span>
+                          <span className={`font-medium ${balanceRating.color}`}>
+                            {quality.balanceScore}/100 ({balanceRating.text})
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Avg Skill Difference:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {quality.details.averageSkillDifference} points
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Freshness Metrics */}
+                    <div>
+                      <h5 className="font-medium text-gray-900 dark:text-white mb-3">Match Freshness</h5>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Freshness Score:</span>
+                          <span className={`font-medium ${freshnessRating.color}`}>
+                            {quality.freshnessScore}/100 ({freshnessRating.text})
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Duplicate Prevention:</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            Active
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Match Distribution */}
+                  <div>
+                    <h5 className="font-medium text-gray-900 dark:text-white mb-3">Match Distribution</h5>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                          {quality.details.perfectlyBalanced}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Perfectly Balanced</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">(≤5 point diff)</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                          {quality.details.goodMatches}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Good Matches</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">(6-10 point diff)</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          {quality.details.unbalanced}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Unbalanced</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">(&gt;10 point diff)</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quality Tips */}
+                  {quality.overallScore < 75 && (
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <h6 className="font-medium text-blue-900 dark:text-blue-200 mb-2">💡 Tips to Improve Match Quality:</h6>
+                      <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1">
+                        {quality.balanceScore < 70 && (
+                          <li>• Consider adjusting player skill ratings for better balance</li>
+                        )}
+                        {quality.freshnessScore < 70 && (
+                          <li>• Some players have played together recently - try shuffling again</li>
+                        )}
+                        {quality.details.unbalanced > 0 && (
+                          <li>• {quality.details.unbalanced} match{quality.details.unbalanced > 1 ? 'es are' : ' is'} significantly unbalanced</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

@@ -201,7 +201,7 @@ export function formatStreak(streak: number): string {
   return `${Math.abs(streak)}L`;
 }
 
-// Calculate skill rating adjustment after match (for future dynamic skill updates)
+// Calculate skill rating adjustment after match (for dynamic skill updates)
 export function calculateSkillAdjustment(
   playerSkill: number,
   opponentAverageSkill: number,
@@ -225,4 +225,106 @@ export function calculateSkillAdjustment(
   }
   
   return Math.round(baseAdjustment * gameScoreMultiplier);
+}
+
+// Update player skill rating based on match performance
+export function updatePlayerSkillRating(
+  player: Player,
+  teammateSkill: number,
+  opponent1Skill: number,
+  opponent2Skill: number,
+  isWinner: boolean,
+  gamesWon: number,
+  gamesLost: number
+): Player {
+  const opponentAverageSkill = (opponent1Skill + opponent2Skill) / 2;
+  const skillAdjustment = calculateSkillAdjustment(
+    player.skill,
+    opponentAverageSkill,
+    isWinner,
+    gamesWon,
+    gamesLost
+  );
+  
+  // Apply additional adjustments for extreme results
+  let finalAdjustment = skillAdjustment;
+  
+  // Blowout adjustments
+  if (gamesWon === 4 && gamesLost === 0) {
+    // 4-0 result indicates significant skill mismatch
+    finalAdjustment = isWinner ? finalAdjustment + 3 : finalAdjustment - 3;
+  } else if (gamesWon === 4 && gamesLost === 1) {
+    // 4-1 result indicates moderate skill difference
+    finalAdjustment = isWinner ? finalAdjustment + 2 : finalAdjustment - 2;
+  }
+  
+  // Ensure skill stays within reasonable bounds (20-100)
+  const newSkill = Math.max(20, Math.min(100, player.skill + finalAdjustment));
+  
+  return {
+    ...player,
+    skill: newSkill,
+  };
+}
+
+// Batch update all players' skills after a match
+export function updateAllPlayersSkillsAfterMatch(
+  players: Player[],
+  match: Match
+): Player[] {
+  const teamAPlayer1 = players.find(p => p.id === match.teamA.player1Id);
+  const teamAPlayer2 = players.find(p => p.id === match.teamA.player2Id);
+  const teamBPlayer1 = players.find(p => p.id === match.teamB.player1Id);
+  const teamBPlayer2 = players.find(p => p.id === match.teamB.player2Id);
+  
+  if (!teamAPlayer1 || !teamAPlayer2 || !teamBPlayer1 || !teamBPlayer2) {
+    return players; // Return unchanged if any player not found
+  }
+  
+  const teamAWon = match.teamA.gamesWon > match.teamB.gamesWon;
+  
+  return players.map(player => {
+    if (player.id === match.teamA.player1Id) {
+      return updatePlayerSkillRating(
+        player,
+        teamAPlayer2.skill,
+        teamBPlayer1.skill,
+        teamBPlayer2.skill,
+        teamAWon,
+        match.teamA.gamesWon,
+        match.teamB.gamesWon
+      );
+    } else if (player.id === match.teamA.player2Id) {
+      return updatePlayerSkillRating(
+        player,
+        teamAPlayer1.skill,
+        teamBPlayer1.skill,
+        teamBPlayer2.skill,
+        teamAWon,
+        match.teamA.gamesWon,
+        match.teamB.gamesWon
+      );
+    } else if (player.id === match.teamB.player1Id) {
+      return updatePlayerSkillRating(
+        player,
+        teamBPlayer2.skill,
+        teamAPlayer1.skill,
+        teamAPlayer2.skill,
+        !teamAWon,
+        match.teamB.gamesWon,
+        match.teamA.gamesWon
+      );
+    } else if (player.id === match.teamB.player2Id) {
+      return updatePlayerSkillRating(
+        player,
+        teamBPlayer1.skill,
+        teamAPlayer1.skill,
+        teamAPlayer2.skill,
+        !teamAWon,
+        match.teamB.gamesWon,
+        match.teamA.gamesWon
+      );
+    }
+    return player; // Return unchanged for players not in this match
+  });
 }
