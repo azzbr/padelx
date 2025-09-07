@@ -45,7 +45,7 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <h1 className="text-xl font-bold text-primary-600 dark:text-primary-400">
-                Padel Team Maker
+                Padel X App - Benefit Team Maker
               </h1>
             </div>
           </div>

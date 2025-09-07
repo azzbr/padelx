@@ -74,7 +74,7 @@ export default function Dashboard({ onViewChange }: DashboardProps) {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Welcome to Padel Team Maker - Manage your matches and players
+          Welcome to Padel X App - Benefit Team Maker - Manage your matches and players
         </p>
       </div>
 
