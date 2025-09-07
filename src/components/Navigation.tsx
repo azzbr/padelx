@@ -43,9 +43,14 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 flex items-center">
+              <img 
+                src="/Benefit-New-Logo-Red-edited3.webp" 
+                alt="Benefit Logo" 
+                className="h-8 w-auto mr-3"
+              />
               <h1 className="text-xl font-bold text-primary-600 dark:text-primary-400">
-                Padel X App - Benefit Team Maker
+                Padel X Team Maker
               </h1>
             </div>
           </div>
