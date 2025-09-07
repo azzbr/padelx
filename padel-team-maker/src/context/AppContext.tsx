@@ -30,10 +30,13 @@ type AppAction =
   | { type: 'ADD_PLAYER'; payload: Player }
   | { type: 'UPDATE_PLAYER'; payload: Player }
   | { type: 'DELETE_PLAYER'; payload: string }
+  | { type: 'SET_PLAYERS'; payload: Player[] }
   | { type: 'ADD_MATCH'; payload: Match }
   | { type: 'UPDATE_MATCH'; payload: Match }
+  | { type: 'SET_MATCHES'; payload: Match[] }
   | { type: 'ADD_SESSION'; payload: Session }
   | { type: 'UPDATE_SESSION'; payload: Session }
+  | { type: 'SET_SESSIONS'; payload: Session[] }
   | { type: 'SET_CURRENT_SESSION'; payload: Session | null }
   | { type: 'UPDATE_SETTINGS'; payload: AppSettings }
   | { type: 'LOAD_SAMPLE_DATA' };
@@ -88,6 +91,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       savePlayers(filteredPlayers);
       return { ...state, players: filteredPlayers };
     
+    case 'SET_PLAYERS':
+      savePlayers(action.payload);
+      return { ...state, players: action.payload };
+    
     case 'ADD_MATCH':
       const newMatches = [...state.matches, action.payload];
       saveMatches(newMatches);
@@ -100,6 +107,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       saveMatches(updatedMatches);
       return { ...state, matches: updatedMatches };
     
+    case 'SET_MATCHES':
+      saveMatches(action.payload);
+      return { ...state, matches: action.payload };
+    
     case 'ADD_SESSION':
       const newSessions = [...state.sessions, action.payload];
       saveSessions(newSessions);
@@ -111,6 +122,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       );
       saveSessions(updatedSessions);
       return { ...state, sessions: updatedSessions };
+    
+    case 'SET_SESSIONS':
+      saveSessions(action.payload);
+      return { ...state, sessions: action.payload };
     
     case 'SET_CURRENT_SESSION':
       return { ...state, currentSession: action.payload };

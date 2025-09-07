@@ -2,34 +2,13 @@ import React, { useState } from 'react';
 import { AppProvider } from './context/AppContext';
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
+import PlayerManager from './components/PlayerManager';
+import MatchMaker from './components/MatchMaker';
+import LiveMatch from './components/LiveMatch';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-// Placeholder components for now - we'll create these next
-const PlayerManager = ({ onViewChange }: { onViewChange: (view: string) => void }) => (
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Player Manager</h1>
-    <div className="card p-8 text-center">
-      <p className="text-gray-600 dark:text-gray-400">Player management coming soon...</p>
-    </div>
-  </div>
-);
-
-const MatchMaker = ({ onViewChange }: { onViewChange: (view: string) => void }) => (
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Match Maker</h1>
-    <div className="card p-8 text-center">
-      <p className="text-gray-600 dark:text-gray-400">Match making coming soon...</p>
-    </div>
-  </div>
-);
-
-const LiveMatch = ({ onViewChange }: { onViewChange: (view: string) => void }) => (
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Live Matches</h1>
-    <div className="card p-8 text-center">
-      <p className="text-gray-600 dark:text-gray-400">Live match tracking coming soon...</p>
-    </div>
-  </div>
-);
+// Placeholder components for remaining features
 
 const MatchHistory = ({ onViewChange }: { onViewChange: (view: string) => void }) => (
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -78,6 +57,18 @@ function App() {
         <main className="pb-8">
           {renderCurrentView()}
         </main>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="colored"
+        />
       </div>
     </AppProvider>
   );
