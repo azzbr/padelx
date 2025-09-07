@@ -13,7 +13,11 @@ import {
   CalendarCheck,
   Star,
   UserCheck,
-  UserX
+  UserX,
+  CheckSquare,
+  Square,
+  AlertTriangle,
+  UserMinus
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -29,6 +33,8 @@ export default function PlayerManager({ onViewChange }: PlayerManagerProps) {
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [bulkNames, setBulkNames] = useState('');
+  const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
+  const [showBulkActions, setShowBulkActions] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -229,6 +235,87 @@ export default function PlayerManager({ onViewChange }: PlayerManagerProps) {
     toast.success(`All availability cleared for ${date === today ? 'today' : 'tomorrow'}`);
   };
 
+  // Bulk selection functions
+  const togglePlayerSelection = (playerId: string) => {
+    const newSelection = new Set(selectedPlayers);
+    if (newSelection.has(playerId)) {
+      newSelection.delete(playerId);
+    } else {
+      newSelection.add(playerId);
+    }
+    setSelectedPlayers(newSelection);
+  };
+
+  const selectAllPlayers = () => {
+    setSelectedPlayers(new Set(state.players.map(p => p.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedPlayers(new Set());
+  };
+
+  // Bulk delete functions
+  const handleBulkDelete = () => {
+    if (selectedPlayers.size === 0) {
+      toast.error('Please select players to delete');
+      return;
+    }
+
+    const selectedPlayerNames = state.players
+      .filter(p => selectedPlayers.has(p.id))
+      .map(p => p.name);
+
+    if (window.confirm(
+      `Are you sure you want to delete ${selectedPlayers.size} player${selectedPlayers.size > 1 ? 's' : ''}?\n\n${selectedPlayerNames.join(', ')}`
+    )) {
+      selectedPlayers.forEach(playerId => {
+        deletePlayer(playerId);
+      });
+      
+      toast.success(`Deleted ${selectedPlayers.size} player${selectedPlayers.size > 1 ? 's' : ''} successfully!`);
+      setSelectedPlayers(new Set());
+      setShowBulkActions(false);
+    }
+  };
+
+  const handleClearAllPlayers = () => {
+    if (state.players.length === 0) {
+      toast.error('No players to clear');
+      return;
+    }
+
+    if (window.confirm(
+      `Are you sure you want to delete ALL ${state.players.length} players?\n\nThis action cannot be undone and will remove all player data including statistics.`
+    )) {
+      state.players.forEach(player => {
+        deletePlayer(player.id);
+      });
+      
+      toast.success('All players cleared successfully!');
+      setSelectedPlayers(new Set());
+      setShowBulkActions(false);
+    }
+  };
+
+  const handleClearGuestPlayers = () => {
+    const guestPlayers = state.players.filter(p => p.isGuest);
+    
+    if (guestPlayers.length === 0) {
+      toast.error('No guest players to clear');
+      return;
+    }
+
+    if (window.confirm(
+      `Are you sure you want to delete all ${guestPlayers.length} guest player${guestPlayers.length > 1 ? 's' : ''}?`
+    )) {
+      guestPlayers.forEach(player => {
+        deletePlayer(player.id);
+      });
+      
+      toast.success(`Cleared ${guestPlayers.length} guest player${guestPlayers.length > 1 ? 's' : ''} successfully!`);
+    }
+  };
+
   // Get skill preset
   const getSkillPreset = (level: string) => {
     switch (level) {
@@ -338,7 +425,107 @@ export default function PlayerManager({ onViewChange }: PlayerManagerProps) {
           <Database className="w-4 h-4 mr-2" />
           Load Sample Players
         </button>
+
+        {state.players.length > 0 && (
+          <button
+            onClick={() => setShowBulkActions(!showBulkActions)}
+            className="btn btn-secondary"
+          >
+            <CheckSquare className="w-4 h-4 mr-2" />
+            Bulk Actions
+          </button>
+        )}
       </div>
+
+      {/* Bulk Actions Panel */}
+      {showBulkActions && state.players.length > 0 && (
+        <div className="card p-6 mb-8 border-l-4 border-red-500">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+              <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+              Player Management Actions
+            </h3>
+            <button
+              onClick={() => setShowBulkActions(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Selected Players</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedPlayers.size}</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Total Players</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{state.players.length}</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Regular Players</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {state.players.filter(p => !p.isGuest).length}
+              </p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Guest Players</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {state.players.filter(p => p.isGuest).length}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 mb-4">
+            <button
+              onClick={selectAllPlayers}
+              className="btn btn-secondary text-sm"
+            >
+              <CheckSquare className="w-4 h-4 mr-1" />
+              Select All
+            </button>
+            <button
+              onClick={clearSelection}
+              className="btn btn-secondary text-sm"
+            >
+              <Square className="w-4 h-4 mr-1" />
+              Clear Selection
+            </button>
+          </div>
+
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-3">Danger Zone</h4>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedPlayers.size === 0}
+                className="btn btn-danger text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete Selected ({selectedPlayers.size})
+              </button>
+              <button
+                onClick={handleClearGuestPlayers}
+                disabled={state.players.filter(p => p.isGuest).length === 0}
+                className="btn btn-danger text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <UserMinus className="w-4 h-4 mr-1" />
+                Clear All Guests
+              </button>
+              <button
+                onClick={handleClearAllPlayers}
+                className="btn btn-danger text-sm"
+              >
+                <AlertTriangle className="w-4 h-4 mr-1" />
+                Clear All Players
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              ⚠️ These actions cannot be undone and will permanently delete player data including statistics.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Availability Actions */}
       <div className="card p-6 mb-8">
@@ -542,6 +729,22 @@ export default function PlayerManager({ onViewChange }: PlayerManagerProps) {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
+                  {showBulkActions && (
+                    <th className="text-center py-3 px-4 font-medium text-gray-900 dark:text-white w-12">
+                      <button
+                        onClick={() => selectedPlayers.size === state.players.length ? clearSelection() : selectAllPlayers()}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                      >
+                        {selectedPlayers.size === state.players.length ? (
+                          <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        ) : selectedPlayers.size > 0 ? (
+                          <Square className="w-4 h-4 text-blue-600 dark:text-blue-400 opacity-50" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    </th>
+                  )}
                   <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white">Name</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white">Skill</th>
                   <th className="text-center py-3 px-4 font-medium text-gray-900 dark:text-white">Today</th>
@@ -552,7 +755,23 @@ export default function PlayerManager({ onViewChange }: PlayerManagerProps) {
               </thead>
               <tbody>
                 {state.players.map((player) => (
-                  <tr key={player.id} className="border-b border-gray-100 dark:border-gray-800">
+                  <tr key={player.id} className={`border-b border-gray-100 dark:border-gray-800 ${
+                    selectedPlayers.has(player.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                  }`}>
+                    {showBulkActions && (
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => togglePlayerSelection(player.id)}
+                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                        >
+                          {selectedPlayers.has(player.id) ? (
+                            <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-400" />
+                          )}
+                        </button>
+                      </td>
+                    )}
                     <td className="py-3 px-4">
                       <div className="flex items-center">
                         <span className="font-medium text-gray-900 dark:text-white">
