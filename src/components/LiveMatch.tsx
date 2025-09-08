@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Undo2, Play, Pause, Trophy, Clock } from 'lucide-react';
+import { ArrowLeft, Undo2, Play, Pause, Trophy, Clock, Copy, Edit3, Check, X, Minimize2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Match, Player, GamePoint } from '../types';
 import { toast } from 'react-toastify';
@@ -12,6 +12,9 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
   const { state, dispatch } = useApp();
   const [activeMatches, setActiveMatches] = useState<Match[]>([]);
   const [matchTimers, setMatchTimers] = useState<{ [matchId: string]: number }>({});
+  const [compactView, setCompactView] = useState(false);
+  const [editingMatch, setEditingMatch] = useState<string | null>(null);
+  const [editScores, setEditScores] = useState<{ teamA: number; teamB: number }>({ teamA: 0, teamB: 0 });
 
   useEffect(() => {
     // Get current session's matches
@@ -232,6 +235,117 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
     return { difference, color: 'text-red-600', label: 'Unbalanced' };
   };
 
+  const copyMatchToClipboard = async (match: Match) => {
+    const balance = getTeamBalance(match);
+    const status = match.status === 'waiting' ? 'Waiting to Start' :
+                   match.status === 'live' ? 'Live' : 'Completed';
+
+    const winnerText = match.winner ?
+      `\n🏆 Winner: ${match.winner === 'teamA' ? 'Team A' : 'Team B'}` : '';
+
+    const matchText = `🏓 Padel Match - Court ${match.court}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${balance.label} (${balance.difference} skill difference)
+
+👥 Team A: ${getPlayerName(match.teamA.player1Id)} + ${getPlayerName(match.teamA.player2Id)}
+   Score: ${match.teamA.gamesWon}
+
+VS
+
+👥 Team B: ${getPlayerName(match.teamB.player1Id)} + ${getPlayerName(match.teamB.player2Id)}
+   Score: ${match.teamB.gamesWon}
+
+📊 Status: ${status}${winnerText}
+⏱️  Time: ${formatTime(matchTimers[match.id] || 0)}
+
+First to 4 games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/4 complete
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+    try {
+      await navigator.clipboard.writeText(matchText);
+      toast.success('Match details copied to clipboard!');
+    } catch (err) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  const copyAllMatchesToClipboard = async () => {
+    let allMatchesText = '';
+
+    activeMatches.forEach((match, index) => {
+      const matchText = `🏓 Padel Match - Court ${match.court}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👥 ${getPlayerName(match.teamA.player1Id)} + ${getPlayerName(match.teamA.player2Id)} VS 👥 ${getPlayerName(match.teamB.player1Id)} + ${getPlayerName(match.teamB.player2Id)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+      allMatchesText += matchText;
+
+      // Add extra line break between matches (except for the last one)
+      if (index < activeMatches.length - 1) {
+        allMatchesText += '\n';
+      }
+    });
+
+    try {
+      await navigator.clipboard.writeText(allMatchesText);
+      toast.success('All match results copied to clipboard!');
+    } catch (err) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  const startEditingMatch = (matchId: string) => {
+    const match = activeMatches.find(m => m.id === matchId);
+    if (match) {
+      setEditingMatch(matchId);
+      setEditScores({
+        teamA: match.teamA.gamesWon,
+        teamB: match.teamB.gamesWon
+      });
+    }
+  };
+
+  const saveEditedScores = (matchId: string) => {
+    const match = state.matches.find(m => m.id === matchId);
+    if (!match) return;
+
+    const updatedMatch: Match = {
+      ...match,
+      teamA: {
+        ...match.teamA,
+        gamesWon: editScores.teamA
+      },
+      teamB: {
+        ...match.teamB,
+        gamesWon: editScores.teamB
+      },
+      status: 'live' as const,
+      winner: undefined,
+      endTime: undefined
+    };
+
+    // Check if match should be completed after edit
+    if (updatedMatch.teamA.gamesWon >= 4 || updatedMatch.teamB.gamesWon >= 4) {
+      updatedMatch.status = 'completed' as const;
+      updatedMatch.winner = updatedMatch.teamA.gamesWon >= 4 ? 'teamA' as const : 'teamB' as const;
+      updatedMatch.endTime = new Date().toISOString();
+      updatePlayerStats(updatedMatch);
+    }
+
+    const updatedMatches = state.matches.map(m =>
+      m.id === matchId ? updatedMatch : m
+    );
+
+    dispatch({ type: 'SET_MATCHES', payload: updatedMatches });
+    setEditingMatch(null);
+    toast.success('Scores updated successfully!');
+  };
+
+  const cancelEditing = () => {
+    setEditingMatch(null);
+    setEditScores({ teamA: 0, teamB: 0 });
+  };
+
   if (activeMatches.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -276,22 +390,222 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
               </p>
             </div>
           </div>
-          
-          <button
-            onClick={finishAllMatches}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
-          >
-            <Trophy className="w-5 h-5" />
-            <span>Finish Session</span>
-          </button>
+
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={copyAllMatchesToClipboard}
+              className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              title="Copy all matches to clipboard"
+            >
+              <Copy className="w-4 h-4" />
+              <span className="text-sm">Copy All</span>
+            </button>
+
+            <button
+              onClick={() => setCompactView(!compactView)}
+              className="flex items-center space-x-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors border border-gray-300 dark:border-gray-600 rounded-lg"
+              title={compactView ? "Switch to detailed view" : "Switch to compact view"}
+            >
+              <Minimize2 className="w-4 h-4" />
+              <span className="text-sm">{compactView ? "Detailed" : "Compact"}</span>
+            </button>
+
+            <button
+              onClick={finishAllMatches}
+              className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+            >
+              <Trophy className="w-5 h-5" />
+              <span>Finish Session</span>
+            </button>
+          </div>
         </div>
 
         {/* Courts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={compactView ? "space-y-4" : "grid grid-cols-1 lg:grid-cols-2 gap-6"}>
           {activeMatches.map((match) => {
             const balance = getTeamBalance(match);
             const timer = matchTimers[match.id] || 0;
 
+            if (compactView) {
+              // Compact View
+              return (
+                <div
+                  key={match.id}
+                  className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-indigo-100 dark:bg-indigo-900 px-3 py-1 rounded-lg">
+                        <span className="text-indigo-600 dark:text-indigo-400 font-bold text-sm">
+                          Court {match.court}
+                        </span>
+                      </div>
+                      <span className={`text-xs font-medium ${balance.color}`}>
+                        {balance.label}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => copyMatchToClipboard(match)}
+                        className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                        title="Copy match details"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+
+                      {match.status === 'waiting' && (
+                        <button
+                          onClick={() => startMatch(match.id)}
+                          className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition-colors"
+                          title="Start Match"
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {match.status === 'live' && (
+                        <button
+                          onClick={() => startEditingMatch(match.id)}
+                          className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                          title="Edit scores"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    {/* Teams and Scores - Single Line Layout */}
+                    <div className="flex items-center justify-center space-x-2 mb-3">
+                      {/* Team A */}
+                      {match.status === 'live' && editingMatch !== match.id && (
+                        <button
+                          onClick={() => addScore(match.id, 'teamA')}
+                          className="w-7 h-7 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs font-bold flex-shrink-0"
+                        >
+                          +1
+                        </button>
+                      )}
+
+                      <span className="text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                        {getPlayerName(match.teamA.player1Id)} + {getPlayerName(match.teamA.player2Id)}
+                      </span>
+
+                      {/* Team A Score */}
+                      {editingMatch === match.id ? (
+                        <input
+                          type="number"
+                          min="0"
+                          max="4"
+                          value={editScores.teamA}
+                          onChange={(e) => setEditScores(prev => ({ ...prev, teamA: parseInt(e.target.value) || 0 }))}
+                          className="w-10 h-7 text-center text-lg font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-600 rounded"
+                        />
+                      ) : (
+                        <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                          {match.teamA.gamesWon}
+                        </span>
+                      )}
+
+                      {/* VS */}
+                      <span className="text-sm font-bold text-gray-600 dark:text-gray-400 mx-1">VS</span>
+
+                      {/* Team B Score */}
+                      {editingMatch === match.id ? (
+                        <input
+                          type="number"
+                          min="0"
+                          max="4"
+                          value={editScores.teamB}
+                          onChange={(e) => setEditScores(prev => ({ ...prev, teamB: parseInt(e.target.value) || 0 }))}
+                          className="w-10 h-7 text-center text-lg font-bold text-red-600 dark:text-red-400 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded"
+                        />
+                      ) : (
+                        <span className="text-xl font-bold text-red-600 dark:text-red-400">
+                          {match.teamB.gamesWon}
+                        </span>
+                      )}
+
+                      {/* Team B */}
+                      <span className="text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                        {getPlayerName(match.teamB.player1Id)} + {getPlayerName(match.teamB.player2Id)}
+                      </span>
+
+                      {match.status === 'live' && editingMatch !== match.id && (
+                        <button
+                          onClick={() => addScore(match.id, 'teamB')}
+                          className="w-7 h-7 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs font-bold flex-shrink-0"
+                        >
+                          +1
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Edit Controls */}
+                    {editingMatch === match.id && (
+                      <div className="flex items-center justify-center space-x-2 mb-3">
+                        <button
+                          onClick={() => saveEditedScores(match.id)}
+                          className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Save</span>
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="flex items-center space-x-1 px-3 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                          <span>Cancel</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Match Controls */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        {match.status === 'live' && editingMatch !== match.id && (
+                          <button
+                            onClick={() => undoLastAction(match.id)}
+                            disabled={match.history.length === 0}
+                            className="flex items-center space-x-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Undo2 className="w-3 h-3" />
+                            <span>Undo</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {match.status === 'completed' && (
+                          <div className="flex items-center space-x-1 text-green-600 dark:text-green-400">
+                            <Trophy className="w-4 h-4" />
+                            <span className="text-xs font-medium">
+                              {match.winner === 'teamA' ? 'Team A Wins!' : 'Team B Wins!'}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          match.status === 'waiting'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                            : match.status === 'live'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                        }`}>
+                          {match.status === 'waiting' ? 'Waiting' :
+                           match.status === 'live' ? 'Live' : 'Completed'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Detailed View
             return (
               <div
                 key={match.id}
@@ -310,8 +624,16 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
                       <span>{formatTime(timer)}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => copyMatchToClipboard(match)}
+                      className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                      title="Copy match details"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+
                     <span className={`text-sm font-medium ${balance.color}`}>
                       {balance.label}
                     </span>
@@ -337,12 +659,24 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
                       </div>
                       <div className="text-sm text-blue-700 dark:text-blue-300">Team A</div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-4">
-                      <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                        {match.teamA.gamesWon}
-                      </div>
-                      {match.status === 'live' && (
+                      {editingMatch === match.id ? (
+                        <input
+                          type="number"
+                          min="0"
+                          max="4"
+                          value={editScores.teamA}
+                          onChange={(e) => setEditScores(prev => ({ ...prev, teamA: parseInt(e.target.value) || 0 }))}
+                          className="w-16 h-12 text-center text-2xl font-bold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-600 rounded-lg"
+                        />
+                      ) : (
+                        <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                          {match.teamA.gamesWon}
+                        </div>
+                      )}
+
+                      {match.status === 'live' && editingMatch !== match.id && (
                         <button
                           onClick={() => addScore(match.id, 'teamA')}
                           className="bg-blue-600 text-white w-12 h-12 rounded-lg hover:bg-blue-700 transition-colors text-xl font-bold"
@@ -367,12 +701,24 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
                       </div>
                       <div className="text-sm text-red-700 dark:text-red-300">Team B</div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-4">
-                      <div className="text-3xl font-bold text-red-900 dark:text-red-100">
-                        {match.teamB.gamesWon}
-                      </div>
-                      {match.status === 'live' && (
+                      {editingMatch === match.id ? (
+                        <input
+                          type="number"
+                          min="0"
+                          max="4"
+                          value={editScores.teamB}
+                          onChange={(e) => setEditScores(prev => ({ ...prev, teamB: parseInt(e.target.value) || 0 }))}
+                          className="w-16 h-12 text-center text-2xl font-bold text-red-900 dark:text-red-100 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded-lg"
+                        />
+                      ) : (
+                        <div className="text-3xl font-bold text-red-900 dark:text-red-100">
+                          {match.teamB.gamesWon}
+                        </div>
+                      )}
+
+                      {match.status === 'live' && editingMatch !== match.id && (
                         <button
                           onClick={() => addScore(match.id, 'teamB')}
                           className="bg-red-600 text-white w-12 h-12 rounded-lg hover:bg-red-700 transition-colors text-xl font-bold"
@@ -385,18 +731,48 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
                   </div>
                 </div>
 
+                {/* Edit Controls */}
+                {editingMatch === match.id && (
+                  <div className="flex items-center justify-center space-x-4 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      onClick={() => saveEditedScores(match.id)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Save</span>
+                    </button>
+                    <button
+                      onClick={cancelEditing}
+                      className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Cancel</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Match Controls */}
                 <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center space-x-2">
-                    {match.status === 'live' && (
-                      <button
-                        onClick={() => undoLastAction(match.id)}
-                        disabled={match.history.length === 0}
-                        className="flex items-center space-x-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Undo2 className="w-4 h-4" />
-                        <span>Undo</span>
-                      </button>
+                    {match.status === 'live' && editingMatch !== match.id && (
+                      <>
+                        <button
+                          onClick={() => undoLastAction(match.id)}
+                          disabled={match.history.length === 0}
+                          className="flex items-center space-x-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Undo2 className="w-4 h-4" />
+                          <span>Undo</span>
+                        </button>
+
+                        <button
+                          onClick={() => startEditingMatch(match.id)}
+                          className="flex items-center space-x-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          <span>Edit</span>
+                        </button>
+                      </>
                     )}
                   </div>
 
@@ -409,15 +785,15 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
                         </span>
                       </div>
                     )}
-                    
+
                     <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      match.status === 'waiting' 
+                      match.status === 'waiting'
                         ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                         : match.status === 'live'
                         ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                         : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                     }`}>
-                      {match.status === 'waiting' ? 'Waiting' : 
+                      {match.status === 'waiting' ? 'Waiting' :
                        match.status === 'live' ? 'Live' : 'Completed'}
                     </div>
                   </div>
