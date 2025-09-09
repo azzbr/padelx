@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 
 // Default settings
 const DEFAULT_SETTINGS: AppSettings = {
-  gamesToWin: 4,
+  gamesToWin: 6,
   courtsAvailable: ['A', 'B', 'C', 'D'],
   darkMode: false,
 };
