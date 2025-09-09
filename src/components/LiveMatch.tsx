@@ -104,16 +104,33 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
       history: [...match.history, gamePoint]
     };
 
-    // Check if match is won (first to 4 games)
-    if (updatedMatch[team].gamesWon >= 4) {
+    // Check if match is won (first to gamesToWin games)
+    const gamesToWin = state.settings.gamesToWin;
+    const opponentTeam = team === 'teamA' ? 'teamB' : 'teamA';
+    const currentScore = updatedMatch[team].gamesWon;
+    const opponentScore = updatedMatch[opponentTeam].gamesWon;
+
+    // Check for regular win condition
+    if (currentScore >= gamesToWin) {
       updatedMatch.status = 'completed';
       updatedMatch.winner = team;
       updatedMatch.endTime = new Date().toISOString();
-      
+
       // Update player stats
       updatePlayerStats(updatedMatch);
-      
+
       toast.success(`Match completed! ${team === 'teamA' ? 'Team A' : 'Team B'} wins!`);
+    }
+    // Check for early termination (significant lead, e.g., 5-2)
+    else if (currentScore >= gamesToWin - 1 && opponentScore <= 2) {
+      updatedMatch.status = 'completed';
+      updatedMatch.winner = team;
+      updatedMatch.endTime = new Date().toISOString();
+
+      // Update player stats
+      updatePlayerStats(updatedMatch);
+
+      toast.success(`Match completed early! ${team === 'teamA' ? 'Team A' : 'Team B'} wins by significant lead!`);
     }
 
     const updatedMatches = state.matches.map(m => 
@@ -258,7 +275,7 @@ VS
 📊 Status: ${status}${winnerText}
 ⏱️  Time: ${formatTime(matchTimers[match.id] || 0)}
 
-First to 4 games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/4 complete
+First to ${state.settings.gamesToWin} games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/${state.settings.gamesToWin} complete
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
     try {
@@ -325,9 +342,23 @@ First to 4 games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/
     };
 
     // Check if match should be completed after edit
-    if (updatedMatch.teamA.gamesWon >= 4 || updatedMatch.teamB.gamesWon >= 4) {
+    const gamesToWin = state.settings.gamesToWin;
+    if (updatedMatch.teamA.gamesWon >= gamesToWin || updatedMatch.teamB.gamesWon >= gamesToWin) {
       updatedMatch.status = 'completed' as const;
-      updatedMatch.winner = updatedMatch.teamA.gamesWon >= 4 ? 'teamA' as const : 'teamB' as const;
+      updatedMatch.winner = updatedMatch.teamA.gamesWon >= gamesToWin ? 'teamA' as const : 'teamB' as const;
+      updatedMatch.endTime = new Date().toISOString();
+      updatePlayerStats(updatedMatch);
+    }
+    // Check for early termination after edit
+    else if (updatedMatch.teamA.gamesWon >= gamesToWin - 1 && updatedMatch.teamB.gamesWon <= 2) {
+      updatedMatch.status = 'completed' as const;
+      updatedMatch.winner = 'teamA' as const;
+      updatedMatch.endTime = new Date().toISOString();
+      updatePlayerStats(updatedMatch);
+    }
+    else if (updatedMatch.teamB.gamesWon >= gamesToWin - 1 && updatedMatch.teamA.gamesWon <= 2) {
+      updatedMatch.status = 'completed' as const;
+      updatedMatch.winner = 'teamB' as const;
       updatedMatch.endTime = new Date().toISOString();
       updatePlayerStats(updatedMatch);
     }
@@ -498,7 +529,7 @@ First to 4 games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/
                         <input
                           type="number"
                           min="0"
-                          max="4"
+                          max={state.settings.gamesToWin.toString()}
                           value={editScores.teamA}
                           onChange={(e) => setEditScores(prev => ({ ...prev, teamA: parseInt(e.target.value) || 0 }))}
                           className="w-10 h-7 text-center text-lg font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-600 rounded"
@@ -517,7 +548,7 @@ First to 4 games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/
                         <input
                           type="number"
                           min="0"
-                          max="4"
+                          max={state.settings.gamesToWin.toString()}
                           value={editScores.teamB}
                           onChange={(e) => setEditScores(prev => ({ ...prev, teamB: parseInt(e.target.value) || 0 }))}
                           className="w-10 h-7 text-center text-lg font-bold text-red-600 dark:text-red-400 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded"
@@ -665,7 +696,7 @@ First to 4 games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/
                         <input
                           type="number"
                           min="0"
-                          max="4"
+                          max={state.settings.gamesToWin.toString()}
                           value={editScores.teamA}
                           onChange={(e) => setEditScores(prev => ({ ...prev, teamA: parseInt(e.target.value) || 0 }))}
                           className="w-16 h-12 text-center text-2xl font-bold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-600 rounded-lg"
@@ -707,7 +738,7 @@ First to 4 games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/
                         <input
                           type="number"
                           min="0"
-                          max="4"
+                          max={state.settings.gamesToWin.toString()}
                           value={editScores.teamB}
                           onChange={(e) => setEditScores(prev => ({ ...prev, teamB: parseInt(e.target.value) || 0 }))}
                           className="w-16 h-12 text-center text-2xl font-bold text-red-900 dark:text-red-100 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded-lg"
@@ -802,14 +833,14 @@ First to 4 games wins - ${Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/
                 {/* Progress Bar */}
                 <div className="mt-4">
                   <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    <span>First to 4 games wins</span>
-                    <span>{Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/4</span>
+                    <span>First to {state.settings.gamesToWin} games wins</span>
+                    <span>{Math.max(match.teamA.gamesWon, match.teamB.gamesWon)}/{state.settings.gamesToWin}</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
                       className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
                       style={{
-                        width: `${(Math.max(match.teamA.gamesWon, match.teamB.gamesWon) / 4) * 100}%`
+                        width: `${(Math.max(match.teamA.gamesWon, match.teamB.gamesWon) / state.settings.gamesToWin) * 100}%`
                       }}
                     />
                   </div>

@@ -47,7 +47,7 @@ const initialState: AppState = {
   matches: [],
   sessions: [],
   settings: {
-    gamesToWin: 4,
+    gamesToWin: 6,
     courtsAvailable: ['A', 'B', 'C', 'D'],
     darkMode: false,
   },
