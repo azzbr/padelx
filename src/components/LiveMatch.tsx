@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Undo2, Play, Pause, Trophy, Clock, Copy, Edit3, Check, X, Minimize2 } from 'lucide-react';
+import { ArrowLeft, Undo2, Play, Pause, Trophy, Clock, Copy, Edit3, Check, X, Minimize2, RotateCcw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Match, Player, GamePoint } from '../types';
 import { toast } from 'react-toastify';
@@ -106,9 +106,7 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
 
     // Check if match is won (first to gamesToWin games)
     const gamesToWin = state.settings.gamesToWin;
-    const opponentTeam = team === 'teamA' ? 'teamB' : 'teamA';
     const currentScore = updatedMatch[team].gamesWon;
-    const opponentScore = updatedMatch[opponentTeam].gamesWon;
 
     // Check for regular win condition
     if (currentScore >= gamesToWin) {
@@ -120,17 +118,6 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
       updatePlayerStats(updatedMatch);
 
       toast.success(`Match completed! ${team === 'teamA' ? 'Team A' : 'Team B'} wins!`);
-    }
-    // Check for early termination (significant lead, e.g., 5-2)
-    else if (currentScore >= gamesToWin - 1 && opponentScore <= 2) {
-      updatedMatch.status = 'completed';
-      updatedMatch.winner = team;
-      updatedMatch.endTime = new Date().toISOString();
-
-      // Update player stats
-      updatePlayerStats(updatedMatch);
-
-      toast.success(`Match completed early! ${team === 'teamA' ? 'Team A' : 'Team B'} wins by significant lead!`);
     }
 
     const updatedMatches = state.matches.map(m => 
@@ -161,12 +148,40 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
       endTime: undefined
     };
 
-    const updatedMatches = state.matches.map(m => 
+    const updatedMatches = state.matches.map(m =>
       m.id === matchId ? updatedMatch : m
     );
 
     dispatch({ type: 'SET_MATCHES', payload: updatedMatches });
     toast.info('Last action undone');
+  };
+
+  const resetMatch = (matchId: string) => {
+    const match = state.matches.find(m => m.id === matchId);
+    if (!match) return;
+
+    const updatedMatch = {
+      ...match,
+      teamA: {
+        ...match.teamA,
+        gamesWon: 0
+      },
+      teamB: {
+        ...match.teamB,
+        gamesWon: 0
+      },
+      history: [],
+      status: 'live' as const,
+      winner: undefined,
+      endTime: undefined
+    };
+
+    const updatedMatches = state.matches.map(m =>
+      m.id === matchId ? updatedMatch : m
+    );
+
+    dispatch({ type: 'SET_MATCHES', payload: updatedMatches });
+    toast.info('Match reset to 0-0');
   };
 
   const updatePlayerStats = (match: Match) => {
@@ -216,12 +231,92 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
   };
 
   const finishAllMatches = () => {
-    const completedCount = activeMatches.filter(m => m.status === 'completed').length;
-    const totalMatches = activeMatches.length;
+    // Process all matches - complete unfinished ones based on current scores
+    const updatedMatches = activeMatches.map(match => {
+      if (match.status === 'completed') {
+        return match; // Already completed, keep as is
+      }
 
-    if (completedCount < totalMatches) {
-      toast.error(`Please complete all matches first (${completedCount}/${totalMatches} completed)`);
-      return;
+      // Determine winner for incomplete match
+      const teamAScore = match.teamA.gamesWon;
+      const teamBScore = match.teamB.gamesWon;
+
+      let winner: 'teamA' | 'teamB' | undefined;
+      if (teamAScore > teamBScore) {
+        winner = 'teamA';
+      } else if (teamBScore > teamAScore) {
+        winner = 'teamB';
+      }
+      // If tied, winner remains undefined (no points awarded)
+
+      return {
+        ...match,
+        status: 'completed' as const,
+        winner,
+        endTime: new Date().toISOString()
+      };
+    });
+
+    // Update matches in state
+    const allMatches = state.matches.map(match => {
+      const updated = updatedMatches.find(m => m.id === match.id);
+      return updated || match;
+    });
+
+    dispatch({ type: 'SET_MATCHES', payload: allMatches });
+
+    // Update player stats for matches with winners
+    const matchesWithWinners = updatedMatches.filter(m => m.winner);
+    if (matchesWithWinners.length > 0) {
+      const updatedPlayers = state.players.map(player => {
+        let statsUpdated = false;
+
+        matchesWithWinners.forEach(match => {
+          const winningTeam = match.winner === 'teamA' ? match.teamA : match.teamB;
+          const losingTeam = match.winner === 'teamA' ? match.teamB : match.teamA;
+
+          const isWinner = winningTeam.player1Id === player.id || winningTeam.player2Id === player.id;
+          const isLoser = losingTeam.player1Id === player.id || losingTeam.player2Id === player.id;
+
+          if (isWinner || isLoser) {
+            const gamesWon = isWinner ? winningTeam.gamesWon : losingTeam.gamesWon;
+            const gamesLost = isWinner ? losingTeam.gamesWon : winningTeam.gamesWon;
+
+            // Calculate points based on performance
+            let points = 0;
+            if (isWinner) {
+              points = 10; // Win: +10 points
+            } else {
+              // Loss points based on closeness
+              if (gamesWon === 3) points = 2; // Close loss (3-4): +2 points
+              else if (gamesWon === 2) points = 1; // Regular loss (2-4): +1 point
+              else points = 0; // Bad loss (0-4 or 1-4): 0 points
+            }
+
+            player = {
+              ...player,
+              stats: {
+                ...player.stats,
+                matchesPlayed: player.stats.matchesPlayed + 1,
+                matchesWon: isWinner ? player.stats.matchesWon + 1 : player.stats.matchesWon,
+                matchesLost: isLoser ? player.stats.matchesLost + 1 : player.stats.matchesLost,
+                gamesWon: player.stats.gamesWon + gamesWon,
+                gamesLost: player.stats.gamesLost + gamesLost,
+                points: player.stats.points + points,
+                lastPlayed: new Date().toISOString(),
+                currentStreak: isWinner ?
+                  (player.stats.currentStreak >= 0 ? player.stats.currentStreak + 1 : 1) :
+                  (player.stats.currentStreak <= 0 ? player.stats.currentStreak - 1 : -1)
+              }
+            };
+            statsUpdated = true;
+          }
+        });
+
+        return statsUpdated ? player : player;
+      });
+
+      dispatch({ type: 'SET_PLAYERS', payload: updatedPlayers });
     }
 
     // Mark session as completed
@@ -233,7 +328,12 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
     });
 
     dispatch({ type: 'SET_SESSIONS', payload: updatedSessions });
-    toast.success('All matches completed! Session finished.');
+
+    const completedCount = updatedMatches.filter(m => m.status === 'completed').length;
+    const winnerCount = updatedMatches.filter(m => m.winner).length;
+    const tiedCount = updatedMatches.filter(m => !m.winner).length;
+
+    toast.success(`Session finished! ${completedCount} matches completed, ${winnerCount} with winners, ${tiedCount} tied.`);
     onViewChange('history');
   };
 
@@ -346,19 +446,6 @@ First to ${state.settings.gamesToWin} games wins - ${Math.max(match.teamA.gamesW
     if (updatedMatch.teamA.gamesWon >= gamesToWin || updatedMatch.teamB.gamesWon >= gamesToWin) {
       updatedMatch.status = 'completed' as const;
       updatedMatch.winner = updatedMatch.teamA.gamesWon >= gamesToWin ? 'teamA' as const : 'teamB' as const;
-      updatedMatch.endTime = new Date().toISOString();
-      updatePlayerStats(updatedMatch);
-    }
-    // Check for early termination after edit
-    else if (updatedMatch.teamA.gamesWon >= gamesToWin - 1 && updatedMatch.teamB.gamesWon <= 2) {
-      updatedMatch.status = 'completed' as const;
-      updatedMatch.winner = 'teamA' as const;
-      updatedMatch.endTime = new Date().toISOString();
-      updatePlayerStats(updatedMatch);
-    }
-    else if (updatedMatch.teamB.gamesWon >= gamesToWin - 1 && updatedMatch.teamA.gamesWon <= 2) {
-      updatedMatch.status = 'completed' as const;
-      updatedMatch.winner = 'teamB' as const;
       updatedMatch.endTime = new Date().toISOString();
       updatePlayerStats(updatedMatch);
     }
@@ -794,6 +881,14 @@ First to ${state.settings.gamesToWin} games wins - ${Math.max(match.teamA.gamesW
                         >
                           <Undo2 className="w-4 h-4" />
                           <span>Undo</span>
+                        </button>
+
+                        <button
+                          onClick={() => resetMatch(match.id)}
+                          className="flex items-center space-x-2 px-3 py-2 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200 transition-colors"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          <span>Reset</span>
                         </button>
 
                         <button

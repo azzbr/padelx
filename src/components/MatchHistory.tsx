@@ -158,7 +158,10 @@ const MatchHistory: React.FC<MatchHistoryProps> = ({ onViewChange }) => {
     const teamBPlayer1 = getPlayerName(match.teamB.player1Id);
     const teamBPlayer2 = getPlayerName(match.teamB.player2Id);
 
-    if (match.winner === 'teamA') {
+    if (!match.winner) {
+      // Handle tied matches
+      return `Court ${match.court}: ${teamAPlayer1} + ${teamAPlayer2} (${match.teamA.gamesWon}) vs ${teamBPlayer1} + ${teamBPlayer2} (${match.teamB.gamesWon}) - TIE`;
+    } else if (match.winner === 'teamA') {
       return `Court ${match.court}: ${teamAPlayer1} + ${teamAPlayer2} (WINNER ${match.teamA.gamesWon}) vs ${teamBPlayer1} + ${teamBPlayer2} (LOSER ${match.teamB.gamesWon})`;
     } else {
       return `Court ${match.court}: ${teamAPlayer1} + ${teamAPlayer2} (LOSER ${match.teamA.gamesWon}) vs ${teamBPlayer1} + ${teamBPlayer2} (WINNER ${match.teamB.gamesWon})`;
@@ -427,11 +430,13 @@ const MatchHistory: React.FC<MatchHistoryProps> = ({ onViewChange }) => {
                             </div>
                             <div className="ml-4">
                               <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                match.winner === 'teamA' 
+                                !match.winner
+                                  ? 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                  : match.winner === 'teamA'
                                   ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                                   : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                               }`}>
-                                {match.winner === 'teamA' ? 'Team A Won' : 'Team B Won'}
+                                {!match.winner ? 'TIE' : match.winner === 'teamA' ? 'Team A Won' : 'Team B Won'}
                               </div>
                             </div>
                           </div>

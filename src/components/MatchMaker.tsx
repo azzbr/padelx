@@ -2,16 +2,21 @@ import React, { useState } from 'react';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Player, MatchPreview, MatchmakingMode, Match, Session } from '../types';
 import { generateMatches, generateMatchesWithDuplicatePrevention, generateId, calculateMatchQuality, getQualityRating } from '../utils/matchmaking';
-import { 
-  Target, 
-  Dice6, 
-  Heart, 
-  Users, 
-  Shuffle, 
+import {
+  Target,
+  Dice6,
+  Heart,
+  Users,
+  Shuffle,
   CheckCircle,
   AlertTriangle,
   RefreshCw,
-  Play
+  Play,
+  Settings as SettingsIcon,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  X
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -21,12 +26,18 @@ interface MatchMakerProps {
 
 export default function MatchMaker({ onViewChange }: MatchMakerProps) {
   const { state } = useApp();
-  const { addMatch, addSession, setCurrentSession } = useAppActions();
-  
+  const { addMatch, addSession, setCurrentSession, updateSettings } = useAppActions();
+
   const [selectedMode, setSelectedMode] = useState<MatchmakingMode | null>(null);
   const [matchPreview, setMatchPreview] = useState<MatchPreview[] | null>(null);
   const [shuffleCount, setShuffleCount] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    gamesToWin: state.settings.gamesToWin,
+    courtsAvailable: [...state.settings.courtsAvailable],
+  });
+  const [newCourt, setNewCourt] = useState('');
 
   const today = new Date().toISOString().split('T')[0];
   const availablePlayers = state.players.filter(p => p.availability.includes(today));
@@ -189,6 +200,33 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
     setShuffleCount(0);
   };
 
+  // Settings handlers
+  const handleSaveSettings = () => {
+    updateSettings({
+      ...state.settings,
+      gamesToWin: settingsForm.gamesToWin,
+      courtsAvailable: settingsForm.courtsAvailable,
+    });
+    toast.success('Settings saved successfully!');
+  };
+
+  const addCourt = () => {
+    if (newCourt.trim() && !settingsForm.courtsAvailable.includes(newCourt.trim())) {
+      setSettingsForm(prev => ({
+        ...prev,
+        courtsAvailable: [...prev.courtsAvailable, newCourt.trim()]
+      }));
+      setNewCourt('');
+    }
+  };
+
+  const removeCourt = (court: string) => {
+    setSettingsForm(prev => ({
+      ...prev,
+      courtsAvailable: prev.courtsAvailable.filter(c => c !== court)
+    }));
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
@@ -196,6 +234,109 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
         <p className="mt-2 text-gray-600 dark:text-gray-400">
           Generate balanced teams using smart algorithms with duplicate prevention
         </p>
+      </div>
+
+      {/* Session Settings */}
+      <div className="card p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <SettingsIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Session Settings
+            </h2>
+          </div>
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="flex items-center space-x-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+          >
+            {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <span>{showSettings ? 'Hide' : 'Show'} Settings</span>
+          </button>
+        </div>
+
+        {showSettings && (
+          <div className="space-y-6">
+            {/* Games to Win */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Games to Win
+              </label>
+              <div className="flex items-center space-x-4">
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={settingsForm.gamesToWin}
+                  onChange={(e) => setSettingsForm(prev => ({
+                    ...prev,
+                    gamesToWin: parseInt(e.target.value) || 6
+                  }))}
+                  className="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  First team to reach this many games wins the match
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                Current: {state.settings.gamesToWin} | Will apply to new matches
+              </p>
+            </div>
+
+            {/* Available Courts */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Available Courts
+              </label>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {settingsForm.courtsAvailable.map((court) => (
+                  <div
+                    key={court}
+                    className="flex items-center space-x-2 bg-indigo-100 dark:bg-indigo-900 px-3 py-1 rounded-lg"
+                  >
+                    <span className="text-indigo-800 dark:text-indigo-200 font-medium">
+                      Court {court}
+                    </span>
+                    <button
+                      onClick={() => removeCourt(court)}
+                      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  placeholder="Add court (e.g., A, B, C)"
+                  value={newCourt}
+                  onChange={(e) => setNewCourt(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && addCourt()}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <button
+                  onClick={addCourt}
+                  disabled={!newCourt.trim()}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Court
+                </button>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleSaveSettings}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Save Settings
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Player Count Indicator */}

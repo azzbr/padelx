@@ -35,6 +35,7 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
     { id: 'live', label: 'Live Matches', icon: Play },
     { id: 'history', label: 'History', icon: History },
     { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   return (

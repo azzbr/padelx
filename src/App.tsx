@@ -7,6 +7,7 @@ import MatchMaker from './components/MatchMaker';
 import LiveMatch from './components/LiveMatch';
 import MatchHistory from './components/MatchHistory';
 import Leaderboard from './components/Leaderboard';
+import Settings from './components/Settings';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -27,6 +28,8 @@ function App() {
         return <MatchHistory onViewChange={setCurrentView} />;
       case 'leaderboard':
         return <Leaderboard onViewChange={setCurrentView} />;
+      case 'settings':
+        return <Settings onViewChange={setCurrentView} />;
       default:
         return <Dashboard onViewChange={setCurrentView} />;
     }
