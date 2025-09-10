@@ -38,6 +38,7 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
     courtsAvailable: [...state.settings.courtsAvailable],
   });
   const [newCourt, setNewCourt] = useState('');
+  const [roundRobinFormat, setRoundRobinFormat] = useState<'regular-doubles' | 'switch-doubles'>('regular-doubles');
 
   const today = new Date().toISOString().split('T')[0];
   const availablePlayers = state.players.filter(p => p.availability.includes(today));
@@ -131,14 +132,14 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
         onViewChange('tournament');
       } else if (mode === 'round-robin') {
         // Special handling for round-robin mode
-        const tournamentBracket = generateRoundRobinBracket(playersToUse, 'regular-doubles');
+        const tournamentBracket = generateRoundRobinBracket(playersToUse, roundRobinFormat);
 
         // Create round-robin tournament
         const tournament: Tournament = {
           id: generateId(),
           name: generateTournamentName(),
           type: 'round-robin',
-          roundRobinFormat: 'regular-doubles',
+          roundRobinFormat: roundRobinFormat,
           status: 'active',
           currentRound: 1,
           totalRounds: tournamentBracket.length,
@@ -153,7 +154,8 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
         setCurrentTournament(tournament);
 
         const totalMatches = tournamentBracket.flat().length;
-        toast.success(`🎯 Round-Robin Mode created with ${totalMatches} matches across ${tournamentBracket.length} rounds!`);
+        const formatName = roundRobinFormat === 'regular-doubles' ? 'Fixed Teams' : 'Rotating Partners';
+        toast.success(`🎯 Round-Robin Mode (${formatName}) created with ${totalMatches} matches across ${tournamentBracket.length} rounds!`);
 
         // Navigate to tournament view
         onViewChange('tournament');
@@ -605,55 +607,189 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
 
       {/* Algorithm Selection or Match Preview */}
       {!matchPreview ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {algorithms.map((algorithm) => {
-            const Icon = algorithm.icon;
-            return (
-              <div key={algorithm.id} className="card p-6 hover:shadow-lg transition-shadow duration-200">
-                <div className="text-center">
-                  <div className={`inline-flex p-4 rounded-full ${algorithm.color} bg-opacity-10 mb-4`}>
-                    <Icon className={`w-8 h-8 ${algorithm.color.replace('bg-', 'text-')}`} />
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {algorithms.map((algorithm) => {
+              const Icon = algorithm.icon;
+              return (
+                <div key={algorithm.id} className="card p-6 hover:shadow-lg transition-shadow duration-200">
+                  <div className="text-center">
+                    <div className={`inline-flex p-4 rounded-full ${algorithm.color} bg-opacity-10 mb-4`}>
+                      <Icon className={`w-8 h-8 ${algorithm.color.replace('bg-', 'text-')}`} />
+                    </div>
+
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      {algorithm.title}
+                      {algorithm.recommended && (
+                        <span className="ml-2 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
+                          Recommended
+                        </span>
+                      )}
+                    </h3>
+
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                      {algorithm.description}
+                    </p>
+
+                    <button
+                      onClick={() => {
+                        if (algorithm.id === 'round-robin') {
+                          // Show format selection for round-robin
+                          setSelectedMode('round-robin');
+                        } else {
+                          handleGenerateMatches(algorithm.id);
+                        }
+                      }}
+                      disabled={!canGenerate || isGenerating}
+                      className={`btn w-full ${
+                        canGenerate
+                          ? 'btn-primary'
+                          : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {isGenerating && selectedMode === algorithm.id ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Shuffle className="w-4 h-4 mr-2" />
+                          Generate Matches
+                        </>
+                      )}
+                    </button>
                   </div>
-                  
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                    {algorithm.title}
-                    {algorithm.recommended && (
-                      <span className="ml-2 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
-                        Recommended
-                      </span>
-                    )}
-                  </h3>
-                  
-                  <p className="text-gray-600 dark:text-gray-400 mb-6">
-                    {algorithm.description}
-                  </p>
-                  
-                  <button
-                    onClick={() => handleGenerateMatches(algorithm.id)}
-                    disabled={!canGenerate || isGenerating}
-                    className={`btn w-full ${
-                      canGenerate 
-                        ? 'btn-primary' 
-                        : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    {isGenerating && selectedMode === algorithm.id ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Shuffle className="w-4 h-4 mr-2" />
-                        Generate Matches
-                      </>
-                    )}
-                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Round-Robin Format Selection */}
+          {selectedMode === 'round-robin' && !matchPreview && (
+            <div className="card p-8 mt-8 bg-gradient-to-br from-orange-50 via-white to-yellow-50 dark:from-orange-900/20 dark:via-gray-800 dark:to-yellow-900/20 border-orange-200 dark:border-orange-700">
+              <div className="text-center mb-8">
+                <div className="inline-flex p-4 rounded-full bg-orange-100 dark:bg-orange-900/50 mb-4">
+                  <Users className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  Choose Round-Robin Format
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Select how you want to organize partnerships during the tournament
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                {/* Fixed Teams Option */}
+                <div
+                  onClick={() => {
+                    setRoundRobinFormat('regular-doubles');
+                    handleGenerateMatches('round-robin');
+                  }}
+                  className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                    roundRobinFormat === 'regular-doubles'
+                      ? 'bg-orange-500 border-orange-500 text-white shadow-lg'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:border-orange-300 dark:hover:border-orange-500'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-4xl mb-4">👥</div>
+                    <h3 className="text-xl font-bold mb-2">Fixed Teams</h3>
+                    <p className={`text-sm mb-4 ${roundRobinFormat === 'regular-doubles' ? 'text-orange-100' : 'text-gray-600 dark:text-gray-400'}`}>
+                      Same partner throughout the entire tournament. Perfect for competitive play and team chemistry.
+                    </p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-center space-x-2">
+                        <span className="text-green-500">✓</span>
+                        <span>Consistent partnerships</span>
+                      </div>
+                      <div className="flex items-center justify-center space-x-2">
+                        <span className="text-green-500">✓</span>
+                        <span>Team-based scoring</span>
+                      </div>
+                      <div className="flex items-center justify-center space-x-2">
+                        <span className="text-green-500">✓</span>
+                        <span>Strategic team planning</span>
+                      </div>
+                    </div>
+                  </div>
+                  {roundRobinFormat === 'regular-doubles' && (
+                    <div className="absolute -top-3 -right-3 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
+                      <span className="text-white font-bold text-sm">✓</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Rotating Partners Option */}
+                <div
+                  onClick={() => {
+                    setRoundRobinFormat('switch-doubles');
+                    handleGenerateMatches('round-robin');
+                  }}
+                  className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                    roundRobinFormat === 'switch-doubles'
+                      ? 'bg-orange-500 border-orange-500 text-white shadow-lg'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:border-orange-300 dark:hover:border-orange-500'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-4xl mb-4">🔄</div>
+                    <h3 className="text-xl font-bold mb-2">Rotating Partners</h3>
+                    <p className={`text-sm mb-4 ${roundRobinFormat === 'switch-doubles' ? 'text-orange-100' : 'text-gray-600 dark:text-gray-400'}`}>
+                      New partner each round. Great for social play and trying different combinations.
+                    </p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-center space-x-2">
+                        <span className="text-blue-500">🔄</span>
+                        <span>Different partner each round</span>
+                      </div>
+                      <div className="flex items-center justify-center space-x-2">
+                        <span className="text-blue-500">🔄</span>
+                        <span>Individual scoring</span>
+                      </div>
+                      <div className="flex items-center justify-center space-x-2">
+                        <span className="text-blue-500">🔄</span>
+                        <span>Play with everyone</span>
+                      </div>
+                    </div>
+                  </div>
+                  {roundRobinFormat === 'switch-doubles' && (
+                    <div className="absolute -top-3 -right-3 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
+                      <span className="text-white font-bold text-sm">✓</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            );
-          })}
-        </div>
+
+              <div className="text-center mt-8">
+                <button
+                  onClick={() => setSelectedMode(null)}
+                  className="btn btn-secondary mr-4"
+                >
+                  ← Back to Algorithms
+                </button>
+                <button
+                  onClick={() => handleGenerateMatches('round-robin')}
+                  disabled={!canGenerate || isGenerating}
+                  className="btn btn-primary"
+                >
+                  {isGenerating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Creating Tournament...
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-4 h-4 mr-2" />
+                      Start Round-Robin Tournament
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <div>
           {/* Match Preview Header */}

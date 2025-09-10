@@ -899,6 +899,11 @@ export function generateRoundRobinBracket(
     throw new Error('Round-robin tournament requires at least 4 players');
   }
 
+  if (format === 'switch-doubles') {
+    // For switch-doubles, generate rotating partner schedule
+    return generateSwitchDoublesSchedule(players);
+  }
+
   // Create teams based on format
   const teams = createRoundRobinTeams(players, format);
 
@@ -1071,6 +1076,63 @@ function generateRoundRobinSchedule(
   return rounds;
 }
 
+// Generate switch-doubles round-robin schedule (rotating partners)
+function generateSwitchDoublesSchedule(players: Player[]): TournamentMatch[][] {
+  const rounds: TournamentMatch[][] = [];
+  const numPlayers = players.length;
+
+  // For switch-doubles, we need even number of players
+  if (numPlayers % 2 !== 0) {
+    throw new Error('Switch doubles requires even number of players');
+  }
+
+  // Calculate rounds needed (each player plays with each other player once)
+  const roundsNeeded = numPlayers - 1;
+
+  for (let round = 0; round < roundsNeeded; round++) {
+    const roundMatches: TournamentMatch[] = [];
+    const availablePlayers = [...players];
+
+    // Shuffle players for this round to create different partnerships
+    for (let i = availablePlayers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [availablePlayers[i], availablePlayers[j]] = [availablePlayers[j], availablePlayers[i]];
+    }
+
+    // Create matches by pairing players
+    for (let i = 0; i < availablePlayers.length; i += 4) {
+      if (i + 3 < availablePlayers.length) {
+        const player1 = availablePlayers[i];
+        const player2 = availablePlayers[i + 1];
+        const player3 = availablePlayers[i + 2];
+        const player4 = availablePlayers[i + 3];
+
+        roundMatches.push({
+          id: generateId(),
+          round: round + 1,
+          matchNumber: Math.floor(i / 4) + 1,
+          court: `Court ${String.fromCharCode(65 + Math.floor(i / 4))}`,
+          teamA: {
+            player1Id: player1.id,
+            player2Id: player2.id,
+            name: `${player1.name} + ${player2.name}`
+          },
+          teamB: {
+            player1Id: player3.id,
+            player2Id: player4.id,
+            name: `${player3.name} + ${player4.name}`
+          },
+          status: 'pending'
+        });
+      }
+    }
+
+    rounds.push(roundMatches);
+  }
+
+  return rounds;
+}
+
 // Calculate round-robin standings
 export function calculateRoundRobinStandings(
   tournament: Tournament,
@@ -1078,6 +1140,11 @@ export function calculateRoundRobinStandings(
 ): RoundRobinStanding[] {
   if (!tournament.roundRobinStandings) {
     return [];
+  }
+
+  // For switch-doubles format, calculate individual player standings
+  if (tournament.roundRobinFormat === 'switch-doubles') {
+    return calculateSwitchDoublesStandings(tournament, players);
   }
 
   const playerMap = new Map(players.map(p => [p.id, p]));
@@ -1151,6 +1218,119 @@ export function calculateRoundRobinStandings(
         teamName: `${player1.name} + ${player2.name}`,
         player1Id,
         player2Id,
+        played: stats.played,
+        won: stats.won,
+        lost: stats.lost,
+        tied: stats.tied,
+        points: stats.points,
+        pointsFor: stats.pointsFor,
+        pointsAgainst: stats.pointsAgainst,
+        pointsDifference: stats.pointsFor - stats.pointsAgainst,
+        rank: 0 // Will be set after sorting
+      });
+    }
+  });
+
+  // Sort by points, then by points difference, then by points for
+  standings.sort((a, b) => {
+    if (a.points !== b.points) return b.points - a.points;
+    if (a.pointsDifference !== b.pointsDifference) return b.pointsDifference - a.pointsDifference;
+    return b.pointsFor - a.pointsFor;
+  });
+
+  // Assign ranks
+  standings.forEach((standing, index) => {
+    standing.rank = index + 1;
+  });
+
+  return standings;
+}
+
+// Calculate individual player standings for switch-doubles format
+function calculateSwitchDoublesStandings(
+  tournament: Tournament,
+  players: Player[]
+): RoundRobinStanding[] {
+  const playerMap = new Map(players.map(p => [p.id, p]));
+  const playerStats = new Map<string, {
+    played: number;
+    won: number;
+    lost: number;
+    tied: number;
+    points: number;
+    pointsFor: number;
+    pointsAgainst: number;
+  }>();
+
+  // Process all completed matches
+  tournament.bracket.forEach(round => {
+    round.forEach(match => {
+      if (match.status === 'completed' && match.score) {
+        const teamAPlayers = [match.teamA.player1Id, match.teamA.player2Id];
+        const teamBPlayers = [match.teamB.player1Id, match.teamB.player2Id];
+
+        // Initialize player stats if not exists
+        [...teamAPlayers, ...teamBPlayers].forEach(playerId => {
+          if (!playerStats.has(playerId)) {
+            playerStats.set(playerId, { played: 0, won: 0, lost: 0, tied: 0, points: 0, pointsFor: 0, pointsAgainst: 0 });
+          }
+        });
+
+        // Update stats for all players in this match
+        [...teamAPlayers, ...teamBPlayers].forEach(playerId => {
+          const stats = playerStats.get(playerId)!;
+          stats.played++;
+          if (match.score) {
+            stats.pointsFor += match.score.teamA; // Individual points for scoring
+            stats.pointsAgainst += match.score.teamB;
+          }
+        });
+
+        // Award individual points based on match result
+        if (match.winner === 'teamA') {
+          teamAPlayers.forEach(playerId => {
+            const stats = playerStats.get(playerId)!;
+            stats.won++;
+            stats.points += 3;
+          });
+          teamBPlayers.forEach(playerId => {
+            const stats = playerStats.get(playerId)!;
+            stats.lost++;
+            // No points for loss
+          });
+        } else if (match.winner === 'teamB') {
+          teamBPlayers.forEach(playerId => {
+            const stats = playerStats.get(playerId)!;
+            stats.won++;
+            stats.points += 3;
+          });
+          teamAPlayers.forEach(playerId => {
+            const stats = playerStats.get(playerId)!;
+            stats.lost++;
+            // No points for loss
+          });
+        } else {
+          // Tie - 1 point each
+          [...teamAPlayers, ...teamBPlayers].forEach(playerId => {
+            const stats = playerStats.get(playerId)!;
+            stats.tied++;
+            stats.points += 1;
+          });
+        }
+      }
+    });
+  });
+
+  // Convert to standings array (treating each player as a "team")
+  const standings: RoundRobinStanding[] = [];
+  playerStats.forEach((stats, playerId) => {
+    const player = playerMap.get(playerId);
+    if (player) {
+      standings.push({
+        teamId: playerId, // Use player ID as team ID
+        teamName: player.name, // Use player name as team name
+        player1Id: playerId,
+        player2Id: '', // No second player in individual format
         played: stats.played,
         won: stats.won,
         lost: stats.lost,

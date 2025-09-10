@@ -109,7 +109,8 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
     scheduleText += `📅 ${new Date().toLocaleDateString()}\n\n`;
 
     if (currentTournament.type === 'round-robin') {
-      scheduleText += `🎯 Round-Robin Mode\n\n`;
+      const formatName = currentTournament.roundRobinFormat === 'switch-doubles' ? 'Rotating Partners' : 'Fixed Teams';
+      scheduleText += `🎯 Round-Robin Mode (${formatName})\n\n`;
     } else {
       scheduleText += `🏅 Single Elimination Tournament\n\n`;
     }
@@ -137,13 +138,23 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
     if (currentTournament.type === 'round-robin') {
       const standings = calculateRoundRobinStandings(currentTournament, players);
       if (standings.length > 0) {
-        scheduleText += `📊 Current Standings:\n`;
-        scheduleText += `Rank | Team | P | W | L | T | Pts\n`;
-        scheduleText += `-----|------|---|---|---|---|----\n`;
+        if (currentTournament.roundRobinFormat === 'switch-doubles') {
+          scheduleText += `📊 Individual Player Standings:\n`;
+          scheduleText += `Rank | Player | P | W | L | T | Pts\n`;
+          scheduleText += `-----|--------|---|---|---|---|----\n`;
 
-        standings.forEach(standing => {
-          scheduleText += `${standing.rank.toString().padStart(4)} | ${standing.teamName.padEnd(12)} | ${standing.played} | ${standing.won} | ${standing.lost} | ${standing.tied} | ${standing.points}\n`;
-        });
+          standings.forEach(standing => {
+            scheduleText += `${standing.rank.toString().padStart(4)} | ${standing.teamName.padEnd(12)} | ${standing.played} | ${standing.won} | ${standing.lost} | ${standing.tied} | ${standing.points}\n`;
+          });
+        } else {
+          scheduleText += `📊 Team Standings:\n`;
+          scheduleText += `Rank | Team | P | W | L | T | Pts\n`;
+          scheduleText += `-----|------|---|---|---|---|----\n`;
+
+          standings.forEach(standing => {
+            scheduleText += `${standing.rank.toString().padStart(4)} | ${standing.teamName.padEnd(12)} | ${standing.played} | ${standing.won} | ${standing.lost} | ${standing.tied} | ${standing.points}\n`;
+          });
+        }
       }
     }
 
@@ -612,6 +623,11 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
             <Trophy className="w-5 h-5 text-yellow-500" />
             <span>Current Standings</span>
+            {currentTournament.roundRobinFormat === 'switch-doubles' && (
+              <span className="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded ml-2">
+                Individual Rankings
+              </span>
+            )}
           </h3>
 
           <div className="overflow-x-auto">
@@ -619,13 +635,17 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
                   <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Rank</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Team</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">
+                    {currentTournament.roundRobinFormat === 'switch-doubles' ? 'Player' : 'Team'}
+                  </th>
                   <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">P</th>
                   <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">W</th>
                   <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">L</th>
                   <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">T</th>
                   <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">Pts</th>
-                  <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">Diff</th>
+                  {currentTournament.roundRobinFormat !== 'switch-doubles' && (
+                    <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">Diff</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -670,13 +690,15 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
                       <td className="text-center py-3 px-4 font-bold text-indigo-600 dark:text-indigo-400">
                         {standing.points}
                       </td>
-                      <td className={`text-center py-3 px-4 font-medium ${
-                        standing.pointsDifference > 0 ? 'text-green-600 dark:text-green-400' :
-                        standing.pointsDifference < 0 ? 'text-red-600 dark:text-red-400' :
-                        'text-gray-600 dark:text-gray-400'
-                      }`}>
-                        {standing.pointsDifference > 0 ? '+' : ''}{standing.pointsDifference}
-                      </td>
+                      {currentTournament.roundRobinFormat !== 'switch-doubles' && (
+                        <td className={`text-center py-3 px-4 font-medium ${
+                          standing.pointsDifference > 0 ? 'text-green-600 dark:text-green-400' :
+                          standing.pointsDifference < 0 ? 'text-red-600 dark:text-red-400' :
+                          'text-gray-600 dark:text-gray-400'
+                        }`}>
+                          {standing.pointsDifference > 0 ? '+' : ''}{standing.pointsDifference}
+                        </td>
+                      )}
                     </tr>
                   ));
                 })()}
