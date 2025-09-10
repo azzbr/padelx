@@ -8,6 +8,7 @@ import LiveMatch from './components/LiveMatch';
 import MatchHistory from './components/MatchHistory';
 import Leaderboard from './components/Leaderboard';
 import Settings from './components/Settings';
+import TournamentBracket from './components/TournamentBracket';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -22,6 +23,8 @@ function App() {
         return <PlayerManager onViewChange={setCurrentView} />;
       case 'matchmaker':
         return <MatchMaker onViewChange={setCurrentView} />;
+      case 'tournament':
+        return <TournamentBracket onViewChange={setCurrentView} />;
       case 'live':
         return <LiveMatch onViewChange={setCurrentView} />;
       case 'history':

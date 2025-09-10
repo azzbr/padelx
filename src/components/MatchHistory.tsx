@@ -405,7 +405,7 @@ const MatchHistory: React.FC<MatchHistoryProps> = ({ onViewChange }) => {
                       <div className="space-y-3">
                         {session.sessionMatches.map((match, index) => (
                           <div
-                            key={match.id}
+                            key={`${match.id}-${index}`}
                             className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg"
                           >
                             <div className="flex-1">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Undo2, Play, Pause, Trophy, Clock, Copy, Edit3, Check, X, Minimize2, RotateCcw } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, useAppActions } from '../context/AppContext';
 import { Match, Player, GamePoint } from '../types';
+import { updateTournamentWithResult } from '../utils/matchmaking';
 import { toast } from 'react-toastify';
 
 interface LiveMatchProps {
@@ -117,10 +118,29 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
       // Update player stats
       updatePlayerStats(updatedMatch);
 
+      // Check if this is a tournament match and update tournament
+      if (match.sessionId.startsWith('tournament-')) {
+        const tournamentId = match.sessionId.replace('tournament-', '');
+        const currentTournament = state.tournaments.find(t => t.id === tournamentId);
+        if (currentTournament) {
+          const updatedTournament = updateTournamentWithResult(
+            currentTournament,
+            matchId,
+            team,
+            state.players
+          );
+          // Update the tournament in state
+          const updatedTournaments = state.tournaments.map(t =>
+            t.id === tournamentId ? updatedTournament : t
+          );
+          dispatch({ type: 'SET_TOURNAMENTS', payload: updatedTournaments });
+        }
+      }
+
       toast.success(`Match completed! ${team === 'teamA' ? 'Team A' : 'Team B'} wins!`);
     }
 
-    const updatedMatches = state.matches.map(m => 
+    const updatedMatches = state.matches.map(m =>
       m.id === matchId ? updatedMatch : m
     );
 
@@ -540,16 +560,16 @@ First to ${state.settings.gamesToWin} games wins - ${Math.max(match.teamA.gamesW
 
         {/* Courts Grid */}
         <div className={compactView ? "space-y-4" : "grid grid-cols-1 lg:grid-cols-2 gap-6"}>
-          {activeMatches.map((match) => {
+          {activeMatches.map((match, index) => {
             const balance = getTeamBalance(match);
             const timer = matchTimers[match.id] || 0;
 
             if (compactView) {
               // Compact View
               return (
-                <div
-                  key={match.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4"
+              <div
+                key={`${match.id}-${index}`}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">

@@ -215,12 +215,12 @@ export default function Dashboard({ onViewChange }: DashboardProps) {
           <div className="card p-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Matches</h2>
             <div className="space-y-3">
-              {recentMatches.map((match) => {
-                const getPlayerName = (id: string) => 
+              {recentMatches.map((match, index) => {
+                const getPlayerName = (id: string) =>
                   state.players.find(p => p.id === id)?.name || 'Unknown';
-                
+
                 return (
-                  <div key={match.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <div key={`${match.id}-${index}`} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div className="flex items-center">
                       <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
                       <div>

@@ -1,4 +1,4 @@
-import { Player, Team, MatchPreview, MatchmakingMode, Match, Session } from '../types';
+import { Player, Team, MatchPreview, MatchmakingMode, Match, Session, Tournament, TournamentMatch } from '../types';
 import { getMatches, getSessions } from './storage';
 
 // Generate unique ID
@@ -514,6 +514,236 @@ function generateSkillBasedMatchesWithFreshness(players: Player[], recentMatches
   return matches;
 }
 
+// Tournament matchmaking algorithm
+export function generateTournamentMatches(players: Player[]): MatchPreview[] {
+  if (players.length < 4) {
+    throw new Error('Tournament mode requires at least 4 players');
+  }
+
+  // For tournament mode, we'll create a single-elimination bracket
+  // Sort players by skill for seeding (stronger players get better positions)
+  const sortedPlayers = [...players].sort((a, b) => b.skill - a.skill);
+
+  // Calculate number of matches needed for first round
+  const totalPlayers = sortedPlayers.length;
+  const matchesNeeded = Math.floor(totalPlayers / 4); // Each match needs 4 players (2 teams)
+
+  // Use only the players we can fit into complete matches
+  const playersToUse = sortedPlayers.slice(0, matchesNeeded * 4);
+
+  // Create tournament bracket with skill-based seeding
+  const matches: MatchPreview[] = [];
+  const courts = getAvailableCourts(playersToUse.length);
+
+  // Pair players using tournament seeding strategy
+  for (let i = 0; i < matchesNeeded; i++) {
+    const matchPlayers = playersToUse.slice(i * 4, (i + 1) * 4);
+
+    // Tournament seeding: strongest vs weakest, middle vs middle
+    const teamA = createTeam(matchPlayers[0], matchPlayers[3]); // 1st vs 4th
+    const teamB = createTeam(matchPlayers[1], matchPlayers[2]); // 2nd vs 3rd
+
+    matches.push({
+      court: courts[i] || `T${i + 1}`, // Tournament court naming
+      teamA,
+      teamB
+    });
+  }
+
+  return matches;
+}
+
+// Generate complete tournament bracket
+export function generateTournamentBracket(players: Player[]): TournamentMatch[][] {
+  if (players.length < 4) {
+    throw new Error('Tournament requires at least 4 players');
+  }
+
+  const sortedPlayers = [...players].sort((a, b) => b.skill - a.skill);
+  const totalPlayers = sortedPlayers.length;
+
+  // Calculate tournament structure
+  const rounds: TournamentMatch[][] = [];
+  let currentRoundPlayers = sortedPlayers;
+
+  // Generate first round
+  const firstRoundMatches: TournamentMatch[] = [];
+  const matchesInFirstRound = Math.floor(totalPlayers / 4);
+
+  for (let i = 0; i < matchesInFirstRound; i++) {
+    const matchPlayers = currentRoundPlayers.slice(i * 4, (i + 1) * 4);
+    const teamA = createTeam(matchPlayers[0], matchPlayers[3]);
+    const teamB = createTeam(matchPlayers[1], matchPlayers[2]);
+
+    firstRoundMatches.push({
+      id: generateId(),
+      round: 1,
+      matchNumber: i + 1,
+      court: `Court ${String.fromCharCode(65 + i)}`,
+      teamA: {
+        player1Id: teamA.player1.id,
+        player2Id: teamA.player2.id,
+        name: `${teamA.player1.name} + ${teamA.player2.name}`
+      },
+      teamB: {
+        player1Id: teamB.player1.id,
+        player2Id: teamB.player2.id,
+        name: `${teamB.player1.name} + ${teamB.player2.name}`
+      },
+      status: 'pending'
+    });
+  }
+
+  rounds.push(firstRoundMatches);
+
+  // Calculate subsequent rounds
+  let remainingMatches = matchesInFirstRound;
+  let roundNumber = 2;
+
+  while (remainingMatches > 1) {
+    const nextRoundMatches: TournamentMatch[] = [];
+    const matchesInRound = Math.floor(remainingMatches / 2);
+
+    for (let i = 0; i < matchesInRound; i++) {
+      nextRoundMatches.push({
+        id: generateId(),
+        round: roundNumber,
+        matchNumber: i + 1,
+        court: `Court ${String.fromCharCode(65 + i)}`,
+        teamA: {
+          player1Id: '',
+          player2Id: '',
+          name: 'TBD'
+        },
+        teamB: {
+          player1Id: '',
+          player2Id: '',
+          name: 'TBD'
+        },
+        status: 'pending'
+      });
+    }
+
+    rounds.push(nextRoundMatches);
+    remainingMatches = matchesInRound;
+    roundNumber++;
+  }
+
+  return rounds;
+}
+
+// Update tournament with match result and generate next round
+export function updateTournamentWithResult(
+  tournament: Tournament,
+  matchId: string,
+  winner: 'teamA' | 'teamB',
+  players: Player[]
+): Tournament {
+  const updatedTournament = { ...tournament };
+  const playerMap = new Map(players.map(p => [p.id, p]));
+
+  // Find and update the match
+  let matchFound = false;
+  for (const round of updatedTournament.bracket) {
+    const match = round.find(m => m.id === matchId);
+    if (match) {
+      // Preserve the final scores when marking as completed
+      match.winner = winner;
+      match.status = 'completed';
+      // Ensure score is preserved (it should already be set, but make sure)
+      if (!match.score) {
+        match.score = { teamA: 0, teamB: 0 };
+      }
+      matchFound = true;
+      break;
+    }
+  }
+
+  if (!matchFound) {
+    throw new Error('Match not found in tournament');
+  }
+
+  // Check if current round is complete
+  const currentRound = updatedTournament.bracket[updatedTournament.currentRound - 1];
+  const roundComplete = currentRound.every(match => match.status === 'completed');
+
+  if (roundComplete && updatedTournament.currentRound < updatedTournament.bracket.length) {
+    // Generate next round
+    const nextRoundIndex = updatedTournament.currentRound;
+    const nextRound = updatedTournament.bracket[nextRoundIndex];
+
+    // Get winners from current round
+    const winners: { player1Id: string; player2Id: string; name: string }[] = [];
+    currentRound.forEach(match => {
+      if (match.winner) {
+        const winningTeam = match.winner === 'teamA' ? match.teamA : match.teamB;
+        winners.push(winningTeam);
+      }
+    });
+
+    // Update next round matches
+    for (let i = 0; i < nextRound.length && i * 2 < winners.length; i++) {
+      const teamA = winners[i * 2];
+      const teamB = winners[i * 2 + 1];
+
+      if (teamA && teamB) {
+        nextRound[i].teamA = teamA;
+        nextRound[i].teamB = teamB;
+        nextRound[i].status = 'pending';
+        // Initialize score for new round matches
+        nextRound[i].score = { teamA: 0, teamB: 0 };
+        // Clear any previous winner
+        nextRound[i].winner = undefined;
+      }
+    }
+
+    updatedTournament.currentRound = nextRoundIndex + 1;
+  }
+
+  // Check if tournament is complete
+  const finalRound = updatedTournament.bracket[updatedTournament.bracket.length - 1];
+  if (finalRound.length === 1 && finalRound[0].status === 'completed') {
+    const championMatch = finalRound[0];
+    if (championMatch.winner) {
+      const championTeam = championMatch.winner === 'teamA' ? championMatch.teamA : championMatch.teamB;
+      updatedTournament.winner = championTeam.player1Id; // Store first player as representative
+      updatedTournament.status = 'completed';
+      updatedTournament.completedAt = new Date().toISOString();
+    }
+  }
+
+  return updatedTournament;
+}
+
+// Get tournament status summary
+export function getTournamentStatus(tournament: Tournament): {
+  status: string;
+  currentRound: number;
+  totalRounds: number;
+  completedMatches: number;
+  totalMatches: number;
+  winner?: string;
+} {
+  const totalMatches = tournament.bracket.flat().length;
+  const completedMatches = tournament.bracket.flat().filter(m => m.status === 'completed').length;
+
+  let status = 'Active';
+  if (tournament.status === 'completed') {
+    status = 'Completed';
+  } else if (tournament.status === 'setup') {
+    status = 'Setup';
+  }
+
+  return {
+    status,
+    currentRound: tournament.currentRound,
+    totalRounds: tournament.totalRounds,
+    completedMatches,
+    totalMatches,
+    winner: tournament.winner
+  };
+}
+
 // Main matchmaking function (backwards compatibility)
 export function generateMatches(players: Player[], mode: MatchmakingMode): MatchPreview[] {
   switch (mode) {
@@ -523,6 +753,8 @@ export function generateMatches(players: Player[], mode: MatchmakingMode): Match
       return generateRandomBalancedMatches(players);
     case 'mixed-tiers':
       return generateMixedTiersMatches(players);
+    case 'tournament':
+      return generateTournamentMatches(players);
     default:
       throw new Error(`Unknown matchmaking mode: ${mode}`);
   }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp, useAppActions } from '../context/AppContext';
-import { Player, MatchPreview, MatchmakingMode, Match, Session } from '../types';
-import { generateMatches, generateMatchesWithDuplicatePrevention, generateId, calculateMatchQuality, getQualityRating } from '../utils/matchmaking';
+import { Player, MatchPreview, MatchmakingMode, Match, Session, Tournament } from '../types';
+import { generateMatches, generateMatchesWithDuplicatePrevention, generateId, calculateMatchQuality, getQualityRating, generateTournamentBracket } from '../utils/matchmaking';
 import {
   Target,
   Dice6,
@@ -26,7 +26,7 @@ interface MatchMakerProps {
 
 export default function MatchMaker({ onViewChange }: MatchMakerProps) {
   const { state } = useApp();
-  const { addMatch, addSession, setCurrentSession, updateSettings } = useAppActions();
+  const { addMatch, addSession, setCurrentSession, addTournament, setCurrentTournament, updateSettings } = useAppActions();
 
   const [selectedMode, setSelectedMode] = useState<MatchmakingMode | null>(null);
   const [matchPreview, setMatchPreview] = useState<MatchPreview[] | null>(null);
@@ -69,6 +69,14 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
       color: 'bg-purple-500',
       recommended: false,
     },
+    {
+      id: 'tournament' as MatchmakingMode,
+      title: 'Tournament Mode',
+      description: 'Single-elimination tournament with balanced brackets',
+      icon: Target,
+      color: 'bg-purple-600',
+      recommended: false,
+    },
   ];
 
   // Generate matches with selected algorithm
@@ -87,14 +95,41 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
     try {
       // Use maximum available players (multiple of 4)
       const playersToUse = availablePlayers.slice(0, maxPlayers);
-      
-      // Use enhanced matchmaking with duplicate prevention
-      const matches = generateMatchesWithDuplicatePrevention(playersToUse, mode);
-      setMatchPreview(matches);
-      
-      const matchCount = matches.length;
-      const courtText = matchCount === 1 ? 'court' : 'courts';
-      toast.success(`Generated ${matchCount} match${matchCount > 1 ? 'es' : ''} on ${matchCount} ${courtText} using ${algorithms.find(a => a.id === mode)?.title} with duplicate prevention!`);
+
+      if (mode === 'tournament') {
+        // Special handling for tournament mode
+        const tournamentBracket = generateTournamentBracket(playersToUse);
+
+        // Create tournament
+        const tournament: Tournament = {
+          id: generateId(),
+          name: `Tournament ${new Date().toLocaleDateString()}`,
+          type: 'single-elimination',
+          status: 'active',
+          currentRound: 1,
+          totalRounds: tournamentBracket.length,
+          players: playersToUse.map(p => p.id),
+          bracket: tournamentBracket,
+          createdAt: new Date().toISOString(),
+        };
+
+        // Add tournament to state
+        addTournament(tournament);
+        setCurrentTournament(tournament);
+
+        toast.success(`🏆 Tournament created with ${tournamentBracket[0].length} first-round matches!`);
+
+        // Navigate to tournament view
+        onViewChange('tournament');
+      } else {
+        // Regular matchmaking modes
+        const matches = generateMatchesWithDuplicatePrevention(playersToUse, mode);
+        setMatchPreview(matches);
+
+        const matchCount = matches.length;
+        const courtText = matchCount === 1 ? 'court' : 'courts';
+        toast.success(`Generated ${matchCount} match${matchCount > 1 ? 'es' : ''} on ${matchCount} ${courtText} using ${algorithms.find(a => a.id === mode)?.title} with duplicate prevention!`);
+      }
     } catch (error) {
       toast.error('Failed to generate matches. Please try again.');
       console.error('Match generation error:', error);
@@ -236,103 +271,258 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
         </p>
       </div>
 
-      {/* Session Settings */}
-      <div className="card p-6 mb-8">
-        <div className="flex items-center justify-between mb-4">
+      {/* Modern Session Settings */}
+      <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-800 dark:via-gray-900 dark:to-indigo-900/20 rounded-2xl p-6 mb-8 border border-indigo-100 dark:border-gray-700 shadow-lg">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
-            <SettingsIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Session Settings
-            </h2>
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-xl">
+              <SettingsIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Session Settings
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Configure your match preferences
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className="flex items-center space-x-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all duration-200 shadow-sm"
           >
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {showSettings ? 'Collapse' : 'Expand'}
+            </span>
             {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            <span>{showSettings ? 'Hide' : 'Show'} Settings</span>
           </button>
         </div>
 
         {showSettings && (
           <div className="space-y-6">
-            {/* Games to Win */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Games to Win
-              </label>
-              <div className="flex items-center space-x-4">
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={settingsForm.gamesToWin}
-                  onChange={(e) => setSettingsForm(prev => ({
-                    ...prev,
-                    gamesToWin: parseInt(e.target.value) || 6
-                  }))}
-                  className="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  First team to reach this many games wins the match
-                </span>
+            {/* Games to Win Section */}
+            <div className="bg-white dark:bg-gray-800/50 rounded-xl p-5 border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                  <span className="text-xl">🎯</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Games to Win
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    First team to reach this many games wins the match
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                Current: {state.settings.gamesToWin} | Will apply to new matches
-              </p>
-            </div>
 
-            {/* Available Courts */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Available Courts
-              </label>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {settingsForm.courtsAvailable.map((court) => (
-                  <div
-                    key={court}
-                    className="flex items-center space-x-2 bg-indigo-100 dark:bg-indigo-900 px-3 py-1 rounded-lg"
+              <div className="space-y-4">
+                {/* Two-Box Selection */}
+                <div className="flex items-center justify-center space-x-4">
+                  {/* 4 Games Box */}
+                  <button
+                    onClick={() => {
+                      setSettingsForm(prev => ({ ...prev, gamesToWin: 4 }));
+                      updateSettings({
+                        ...state.settings,
+                        gamesToWin: 4,
+                      });
+                      toast.success('Games to win set to 4!');
+                    }}
+                    className={`relative px-8 py-4 rounded-xl border-2 transition-all duration-200 transform hover:scale-105 ${
+                      settingsForm.gamesToWin === 4
+                        ? 'bg-blue-500 border-blue-500 text-white shadow-lg'
+                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-500'
+                    }`}
                   >
-                    <span className="text-indigo-800 dark:text-indigo-200 font-medium">
-                      Court {court}
-                    </span>
-                    <button
-                      onClick={() => removeCourt(court)}
-                      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold mb-1">4</div>
+                      <div className="text-sm font-medium">Games</div>
+                    </div>
+                    {settingsForm.gamesToWin === 4 && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                    )}
+                  </button>
 
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="Add court (e.g., A, B, C)"
-                  value={newCourt}
-                  onChange={(e) => setNewCourt(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && addCourt()}
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-                <button
-                  onClick={addCourt}
-                  disabled={!newCourt.trim()}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Court
-                </button>
+                  {/* 6 Games Box */}
+                  <button
+                    onClick={() => {
+                      setSettingsForm(prev => ({ ...prev, gamesToWin: 6 }));
+                      updateSettings({
+                        ...state.settings,
+                        gamesToWin: 6,
+                      });
+                      toast.success('Games to win set to 6!');
+                    }}
+                    className={`relative px-8 py-4 rounded-xl border-2 transition-all duration-200 transform hover:scale-105 ${
+                      settingsForm.gamesToWin === 6
+                        ? 'bg-blue-500 border-blue-500 text-white shadow-lg'
+                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-500'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-2xl font-bold mb-1">6</div>
+                      <div className="text-sm font-medium">Games</div>
+                    </div>
+                    {settingsForm.gamesToWin === 6 && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                    )}
+                  </button>
+                </div>
+
+                {/* Status Display */}
+                <div className="text-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Current: <span className="font-medium text-blue-600 dark:text-blue-400">{state.settings.gamesToWin} games</span>
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    Will apply to new matches • Auto-saved
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+            {/* Available Courts Section - Auto-managed */}
+            <div className="bg-white dark:bg-gray-800/50 rounded-xl p-5 border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-lg">
+                  <span className="text-xl">🏓</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Available Courts
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Auto-managed based on player count
+                  </p>
+                </div>
+              </div>
+
+              {/* Auto Court Calculation */}
+              {(() => {
+                const autoCourtsNeeded = Math.floor(availablePlayers.length / 4);
+                const autoCourtNames = Array.from({ length: autoCourtsNeeded }, (_, i) =>
+                  String.fromCharCode(65 + i) // A, B, C, D...
+                );
+
+                return (
+                  <div className="space-y-4">
+                    {/* Auto-detection Info */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                            <span className="text-lg">🎯</span>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                              Auto-detected: {autoCourtsNeeded} court{autoCourtsNeeded !== 1 ? 's' : ''} needed
+                            </p>
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              Based on {availablePlayers.length} available players
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-blue-600 dark:text-blue-400">
+                            {availablePlayers.length} ÷ 4 = {autoCourtsNeeded}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Auto Court Display */}
+                    {autoCourtsNeeded > 0 ? (
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap gap-3">
+                          {autoCourtNames.map((courtName) => (
+                            <div
+                              key={courtName}
+                              className="bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/50 dark:to-emerald-900/50 px-4 py-3 rounded-xl border border-green-200 dark:border-green-700 shadow-sm"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  Court {courtName}
+                                </span>
+                                <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  Active
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center justify-center space-x-1">
+                            <span>⚡</span>
+                            <span>Courts are automatically managed • No manual setup required</span>
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+                          <span className="text-2xl">🏓</span>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Add at least 4 players to see available courts
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Manual Override Option */}
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                      <button
+                        onClick={() => setShowSettings(!showSettings)}
+                        className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
+                      >
+                        {showSettings ? 'Hide' : 'Show'} manual court management
+                      </button>
+
+                      {showSettings && (
+                        <div className="mt-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                            ⚠️ Manual court management (not recommended - use auto mode above)
+                          </p>
+                          <div className="flex space-x-3">
+                            <input
+                              type="text"
+                              placeholder="Enter court name (e.g., A, B, C)"
+                              value={newCourt}
+                              onChange={(e) => setNewCourt(e.target.value)}
+                              onKeyPress={(e) => e.key === 'Enter' && addCourt()}
+                              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            />
+                            <button
+                              onClick={addCourt}
+                              disabled={!newCourt.trim()}
+                              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Save Settings */}
+            <div className="flex justify-center pt-2">
               <button
                 onClick={handleSaveSettings}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
               >
-                Save Settings
+                💾 Save Settings
               </button>
             </div>
           </div>
@@ -482,67 +672,87 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
               const balance = getBalanceInfo(teamASkill, teamBSkill);
               
               return (
-                <div key={match.court} className="card p-6">
+                <div key={match.court} className={`card p-6 border-2 transition-all duration-300 hover:shadow-lg ${
+                  balance.label === 'Perfectly Balanced'
+                    ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-700'
+                    : balance.label === 'Good Match'
+                    ? 'bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-yellow-200 dark:border-yellow-700'
+                    : 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 border-red-200 dark:border-red-700'
+                }`}>
+                  {/* Enhanced Header with Icon */}
                   <div className="text-center mb-4">
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Court {match.court}
-                    </h4>
-                    <span className={`inline-block px-3 py-1 text-sm rounded-full ${balance.bgColor} ${balance.color}`}>
-                      {balance.label}
-                    </span>
+                    <div className="flex items-center justify-center space-x-2">
+                      <span className="text-2xl">
+                        {balance.label === 'Perfectly Balanced' ? '🏆' :
+                         balance.label === 'Good Match' ? '⚖️' : '⚠️'}
+                      </span>
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Court {match.court} - {balance.label}
+                      </h4>
+                    </div>
                   </div>
 
-                  <div className="space-y-4">
+                  {/* Enhanced Horizontal Team Layout */}
+                  <div className="flex items-center justify-between mb-4">
                     {/* Team A */}
-                    <div className="team-display">
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">Team A</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {match.teamA.player1.name} + {match.teamA.player2.name}
-                        </p>
+                    <div className="flex-1 text-center">
+                      <div className="font-medium text-gray-900 dark:text-white mb-1">Team A</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        ({match.teamA.player1.name} + {match.teamA.player2.name})
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900 dark:text-white">
-                          {teamASkill}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          ({match.teamA.player1.skill} + {match.teamA.player2.skill})
-                        </p>
+                      <div className={`font-bold text-xl px-3 py-1 rounded-lg ${
+                        balance.label === 'Perfectly Balanced'
+                          ? 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200'
+                          : balance.label === 'Good Match'
+                          ? 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200'
+                          : 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200'
+                      }`}>
+                        {teamASkill}
                       </div>
                     </div>
 
-                    {/* VS Divider */}
-                    <div className="text-center">
-                      <span className="text-gray-400 dark:text-gray-600 font-bold">VS</span>
+                    {/* Enhanced VS Divider */}
+                    <div className="mx-4">
+                      <div className={`px-4 py-2 rounded-full font-bold text-xl ${
+                        balance.label === 'Perfectly Balanced'
+                          ? 'bg-green-200 dark:bg-green-700 text-green-800 dark:text-green-200'
+                          : balance.label === 'Good Match'
+                          ? 'bg-yellow-200 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-200'
+                          : 'bg-red-200 dark:bg-red-700 text-red-800 dark:text-red-200'
+                      }`}>
+                        VS
+                      </div>
                     </div>
 
                     {/* Team B */}
-                    <div className="team-display">
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">Team B</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {match.teamB.player1.name} + {match.teamB.player2.name}
-                        </p>
+                    <div className="flex-1 text-center">
+                      <div className="font-medium text-gray-900 dark:text-white mb-1">Team B</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        ({match.teamB.player1.name} + {match.teamB.player2.name})
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900 dark:text-white">
-                          {teamBSkill}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          ({match.teamB.player1.skill} + {match.teamB.player2.skill})
-                        </p>
+                      <div className={`font-bold text-xl px-3 py-1 rounded-lg ${
+                        balance.label === 'Perfectly Balanced'
+                          ? 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200'
+                          : balance.label === 'Good Match'
+                          ? 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200'
+                          : 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200'
+                      }`}>
+                        {teamBSkill}
                       </div>
                     </div>
                   </div>
 
-                  {/* Balance Info */}
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Skill Difference:</span>
-                      <span className={`font-medium ${balance.color}`}>
-                        {Math.abs(teamASkill - teamBSkill)} points
-                      </span>
-                    </div>
+                  {/* Enhanced Skill Difference Badge */}
+                  <div className="text-center">
+                    <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${
+                      balance.label === 'Perfectly Balanced'
+                        ? 'bg-green-200 dark:bg-green-700 text-green-800 dark:text-green-200'
+                        : balance.label === 'Good Match'
+                        ? 'bg-yellow-200 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-200'
+                        : 'bg-red-200 dark:bg-red-700 text-red-800 dark:text-red-200'
+                    }`}>
+                      Skill Difference: {Math.abs(teamASkill - teamBSkill)} points
+                    </span>
                   </div>
                 </div>
               );

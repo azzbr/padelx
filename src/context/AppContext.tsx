@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { Player, Match, Session, AppSettings, MatchmakingMode } from '../types';
+import { Player, Match, Session, AppSettings, MatchmakingMode, Tournament } from '../types';
 import { 
   getPlayers, 
   getMatches, 
@@ -16,8 +16,10 @@ interface AppState {
   players: Player[];
   matches: Match[];
   sessions: Session[];
+  tournaments: Tournament[];
   settings: AppSettings;
   currentSession: Session | null;
+  currentTournament: Tournament | null;
   loading: boolean;
   error: string | null;
 }
@@ -38,6 +40,10 @@ type AppAction =
   | { type: 'UPDATE_SESSION'; payload: Session }
   | { type: 'SET_SESSIONS'; payload: Session[] }
   | { type: 'SET_CURRENT_SESSION'; payload: Session | null }
+  | { type: 'ADD_TOURNAMENT'; payload: Tournament }
+  | { type: 'UPDATE_TOURNAMENT'; payload: Tournament }
+  | { type: 'SET_TOURNAMENTS'; payload: Tournament[] }
+  | { type: 'SET_CURRENT_TOURNAMENT'; payload: Tournament | null }
   | { type: 'UPDATE_SETTINGS'; payload: AppSettings }
   | { type: 'LOAD_SAMPLE_DATA' };
 
@@ -46,12 +52,14 @@ const initialState: AppState = {
   players: [],
   matches: [],
   sessions: [],
+  tournaments: [],
   settings: {
     gamesToWin: 6,
     courtsAvailable: ['A', 'B', 'C', 'D'],
     darkMode: false,
   },
   currentSession: null,
+  currentTournament: null,
   loading: false,
   error: null,
 };
@@ -129,7 +137,31 @@ function appReducer(state: AppState, action: AppAction): AppState {
     
     case 'SET_CURRENT_SESSION':
       return { ...state, currentSession: action.payload };
-    
+
+    case 'ADD_TOURNAMENT':
+      const newTournaments = [...state.tournaments, action.payload];
+      return { ...state, tournaments: newTournaments };
+
+    case 'UPDATE_TOURNAMENT':
+      const updatedTournaments = state.tournaments.map(t =>
+        t.id === action.payload.id ? action.payload : t
+      );
+      // Also update currentTournament if it's the same tournament
+      const updatedCurrentTournament = state.currentTournament?.id === action.payload.id
+        ? action.payload
+        : state.currentTournament;
+      return {
+        ...state,
+        tournaments: updatedTournaments,
+        currentTournament: updatedCurrentTournament
+      };
+
+    case 'SET_TOURNAMENTS':
+      return { ...state, tournaments: action.payload };
+
+    case 'SET_CURRENT_TOURNAMENT':
+      return { ...state, currentTournament: action.payload };
+
     case 'UPDATE_SETTINGS':
       saveSettings(action.payload);
       return { ...state, settings: action.payload };
@@ -206,6 +238,9 @@ export function useAppActions() {
     addSession: (session: Session) => dispatch({ type: 'ADD_SESSION', payload: session }),
     updateSession: (session: Session) => dispatch({ type: 'UPDATE_SESSION', payload: session }),
     setCurrentSession: (session: Session | null) => dispatch({ type: 'SET_CURRENT_SESSION', payload: session }),
+    addTournament: (tournament: Tournament) => dispatch({ type: 'ADD_TOURNAMENT', payload: tournament }),
+    updateTournament: (tournament: Tournament) => dispatch({ type: 'UPDATE_TOURNAMENT', payload: tournament }),
+    setCurrentTournament: (tournament: Tournament | null) => dispatch({ type: 'SET_CURRENT_TOURNAMENT', payload: tournament }),
     updateSettings: (settings: AppSettings) => dispatch({ type: 'UPDATE_SETTINGS', payload: settings }),
     loadSampleData: () => dispatch({ type: 'LOAD_SAMPLE_DATA' }),
   };

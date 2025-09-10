@@ -58,13 +58,50 @@ export interface Session {
   };
 }
 
+export interface Tournament {
+  id: string;
+  name: string;
+  type: 'single-elimination' | 'double-elimination' | 'round-robin';
+  status: 'setup' | 'active' | 'completed';
+  currentRound: number;
+  totalRounds: number;
+  players: string[]; // player IDs
+  bracket: TournamentMatch[][];
+  winner?: string; // player ID
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface TournamentMatch {
+  id: string;
+  round: number;
+  matchNumber: number;
+  court?: string;
+  teamA: {
+    player1Id: string;
+    player2Id: string;
+    name: string; // team name for display
+  };
+  teamB: {
+    player1Id: string;
+    player2Id: string;
+    name: string; // team name for display
+  };
+  winner?: 'teamA' | 'teamB';
+  status: 'pending' | 'in-progress' | 'completed';
+  score?: {
+    teamA: number;
+    teamB: number;
+  };
+}
+
 export interface AppSettings {
   gamesToWin: number;
   courtsAvailable: string[];
   darkMode: boolean;
 }
 
-export type MatchmakingMode = 'skill-based' | 'random-balanced' | 'mixed-tiers';
+export type MatchmakingMode = 'skill-based' | 'random-balanced' | 'mixed-tiers' | 'tournament';
 
 export interface Team {
   player1: Player;
