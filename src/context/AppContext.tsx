@@ -1,14 +1,19 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { Player, Match, Session, AppSettings, MatchmakingMode, Tournament } from '../types';
-import { 
-  getPlayers, 
-  getMatches, 
-  getSessions, 
+import {
+  getPlayers,
+  getMatches,
+  getSessions,
   getSettings,
+  getTournaments,
   savePlayers,
   saveMatches,
   saveSessions,
-  saveSettings
+  saveSettings,
+  saveTournaments,
+  addTournament as addTournamentToStorage,
+  updateTournament as updateTournamentInStorage,
+  deleteTournament as deleteTournamentFromStorage
 } from '../utils/storage';
 
 // State interface
@@ -79,6 +84,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         players: getPlayers(),
         matches: getMatches(),
         sessions: getSessions(),
+        tournaments: getTournaments(),
         settings: getSettings(),
       };
     
@@ -140,6 +146,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'ADD_TOURNAMENT':
       const newTournaments = [...state.tournaments, action.payload];
+      addTournamentToStorage(action.payload);
       return { ...state, tournaments: newTournaments };
 
     case 'UPDATE_TOURNAMENT':
@@ -150,6 +157,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const updatedCurrentTournament = state.currentTournament?.id === action.payload.id
         ? action.payload
         : state.currentTournament;
+      updateTournamentInStorage(action.payload);
       return {
         ...state,
         tournaments: updatedTournaments,

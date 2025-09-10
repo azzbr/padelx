@@ -1,10 +1,11 @@
-import { Player, Match, Session, AppSettings } from '../types';
+import { Player, Match, Session, AppSettings, Tournament } from '../types';
 
 const STORAGE_KEYS = {
   PLAYERS: 'padel_players',
   MATCHES: 'padel_matches',
   SESSIONS: 'padel_sessions',
   SETTINGS: 'padel_settings',
+  TOURNAMENTS: 'padel_tournaments',
 } as const;
 
 // Default settings
@@ -120,6 +121,36 @@ export function saveSettings(settings: AppSettings): void {
   saveToStorage(STORAGE_KEYS.SETTINGS, settings);
 }
 
+// Tournament storage functions
+export function getTournaments(): Tournament[] {
+  return getFromStorage<Tournament[]>(STORAGE_KEYS.TOURNAMENTS, []);
+}
+
+export function saveTournaments(tournaments: Tournament[]): void {
+  saveToStorage(STORAGE_KEYS.TOURNAMENTS, tournaments);
+}
+
+export function addTournament(tournament: Tournament): void {
+  const tournaments = getTournaments();
+  tournaments.push(tournament);
+  saveTournaments(tournaments);
+}
+
+export function updateTournament(updatedTournament: Tournament): void {
+  const tournaments = getTournaments();
+  const index = tournaments.findIndex(t => t.id === updatedTournament.id);
+  if (index !== -1) {
+    tournaments[index] = updatedTournament;
+    saveTournaments(tournaments);
+  }
+}
+
+export function deleteTournament(tournamentId: string): void {
+  const tournaments = getTournaments();
+  const filteredTournaments = tournaments.filter(t => t.id !== tournamentId);
+  saveTournaments(filteredTournaments);
+}
+
 // Utility functions
 export function clearAllData(): void {
   Object.values(STORAGE_KEYS).forEach(key => {
@@ -132,6 +163,7 @@ export function exportData(): string {
     players: getPlayers(),
     matches: getMatches(),
     sessions: getSessions(),
+    tournaments: getTournaments(),
     settings: getSettings(),
     exportDate: new Date().toISOString(),
   };
@@ -141,12 +173,13 @@ export function exportData(): string {
 export function importData(jsonData: string): boolean {
   try {
     const data = JSON.parse(jsonData);
-    
+
     if (data.players) savePlayers(data.players);
     if (data.matches) saveMatches(data.matches);
     if (data.sessions) saveSessions(data.sessions);
+    if (data.tournaments) saveTournaments(data.tournaments);
     if (data.settings) saveSettings(data.settings);
-    
+
     return true;
   } catch (error) {
     console.error('Error importing data:', error);

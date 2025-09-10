@@ -31,6 +31,7 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
   const currentTournament = state.currentTournament;
   const players = state.players;
 
+
   if (!currentTournament) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -413,6 +414,7 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
     }
   };
 
+
   const renderMatch = (match: TournamentMatch, roundIndex: number, matchIndex: number) => {
     const status = getMatchStatus(match);
     const StatusIcon = status.icon;
@@ -438,7 +440,7 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
           </div>
           {match.court && (
             <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-              Court {match.court}
+              {match.court}
             </span>
           )}
         </div>
@@ -610,7 +612,7 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
             </p>
           </div>
 
-          {/* Copy and Share Buttons */}
+          {/* Actions */}
           <div className="flex gap-3">
             <button
               onClick={copyTournamentSchedule}
@@ -664,6 +666,9 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
               <tbody>
                 {(() => {
                   const standings = calculateRoundRobinStandings(currentTournament, players);
+                  console.log('Calculated standings:', standings);
+                  console.log('Tournament bracket:', currentTournament.bracket);
+                  console.log('Current tournament:', currentTournament);
                   return standings.map((standing, index) => (
                     <tr key={standing.teamId} className={`border-b border-gray-100 dark:border-gray-700 ${
                       standing.rank === 1 ? 'bg-yellow-50 dark:bg-yellow-900/20' :
