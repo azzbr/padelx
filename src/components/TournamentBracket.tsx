@@ -3,7 +3,7 @@ import { useApp, useAppActions } from '../context/AppContext';
 import { Tournament, TournamentMatch, Player, Match, Session, RoundRobinStanding } from '../types';
 import { Trophy, Play, CheckCircle, Clock, Users, Target, Plus, Minus, Copy, Share2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { generateId, updateTournamentWithResult, calculateRoundRobinStandings } from '../utils/matchmaking';
+import { generateId, updateTournamentWithResult, calculateRoundRobinStandings, updateRoundRobinTournamentWithResult } from '../utils/matchmaking';
 
 // Safe deep copy function that handles complex objects
 function deepCopy(obj: any): any {
@@ -267,13 +267,26 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
       // Save tournament match to match history
       saveTournamentMatchToHistory(currentMatch, currentTournament, roundIndex + 1);
 
-      // Update tournament with winner - pass the updated tournament with preserved scores
-      const tournamentWithWinner = updateTournamentWithResult(
-        updatedTournament, // This has the winner set and final scores preserved
-        match.id,
-        team,
-        state.players
-      );
+      // Update tournament with winner - use appropriate function based on tournament type
+      let tournamentWithWinner;
+      if (currentTournament.type === 'round-robin') {
+        // For round-robin tournaments, use the specific function that updates standings
+        tournamentWithWinner = updateRoundRobinTournamentWithResult(
+          updatedTournament, // This has the winner set and final scores preserved
+          match.id,
+          team,
+          currentMatch.score,
+          state.players
+        );
+      } else {
+        // For single-elimination tournaments, use the original function
+        tournamentWithWinner = updateTournamentWithResult(
+          updatedTournament, // This has the winner set and final scores preserved
+          match.id,
+          team,
+          state.players
+        );
+      }
 
       updateTournament(tournamentWithWinner);
 

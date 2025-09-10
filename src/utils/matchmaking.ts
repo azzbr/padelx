@@ -1138,8 +1138,9 @@ export function calculateRoundRobinStandings(
   tournament: Tournament,
   players: Player[]
 ): RoundRobinStanding[] {
-  if (!tournament.roundRobinStandings) {
-    return [];
+  // If standings are already calculated and stored, use them (prevents unnecessary recalculation)
+  if (tournament.roundRobinStandings && tournament.roundRobinStandings.length > 0) {
+    return tournament.roundRobinStandings;
   }
 
   // For switch-doubles format, calculate individual player standings
