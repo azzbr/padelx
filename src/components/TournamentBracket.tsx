@@ -1,9 +1,9 @@
 import React from 'react';
 import { useApp, useAppActions } from '../context/AppContext';
-import { Tournament, TournamentMatch, Player, Match, Session } from '../types';
-import { Trophy, Play, CheckCircle, Clock, Users, Target, Plus, Minus } from 'lucide-react';
+import { Tournament, TournamentMatch, Player, Match, Session, RoundRobinStanding } from '../types';
+import { Trophy, Play, CheckCircle, Clock, Users, Target, Plus, Minus, Copy, Share2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { generateId, updateTournamentWithResult } from '../utils/matchmaking';
+import { generateId, updateTournamentWithResult, calculateRoundRobinStandings } from '../utils/matchmaking';
 
 // Safe deep copy function that handles complex objects
 function deepCopy(obj: any): any {
@@ -101,6 +101,82 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
     });
 
     return totalPoints;
+  };
+
+  // Generate tournament schedule text for copying
+  const generateTournamentScheduleText = () => {
+    let scheduleText = `🏆 ${currentTournament.name}\n`;
+    scheduleText += `📅 ${new Date().toLocaleDateString()}\n\n`;
+
+    if (currentTournament.type === 'round-robin') {
+      scheduleText += `🎯 Round-Robin Mode\n\n`;
+    } else {
+      scheduleText += `🏅 Single Elimination Tournament\n\n`;
+    }
+
+    currentTournament.bracket.forEach((round, roundIndex) => {
+      scheduleText += `📅 Round ${roundIndex + 1}:\n`;
+
+      round.forEach(match => {
+        const courtName = match.court ? `Court ${match.court}` : 'TBD';
+        scheduleText += `  ${courtName}: ${match.teamA.name} vs ${match.teamB.name}\n`;
+
+        if (match.status === 'completed' && match.score) {
+          const winner = match.winner === 'teamA' ? match.teamA.name : match.teamB.name;
+          scheduleText += `    ✅ ${match.score.teamA} - ${match.score.teamB} (${winner} wins)\n`;
+        } else if (match.status === 'in-progress' && match.score) {
+          scheduleText += `    🔄 ${match.score.teamA} - ${match.score.teamB} (In Progress)\n`;
+        } else {
+          scheduleText += `    ⏳ Not Started\n`;
+        }
+      });
+
+      scheduleText += '\n';
+    });
+
+    if (currentTournament.type === 'round-robin') {
+      const standings = calculateRoundRobinStandings(currentTournament, players);
+      if (standings.length > 0) {
+        scheduleText += `📊 Current Standings:\n`;
+        scheduleText += `Rank | Team | P | W | L | T | Pts\n`;
+        scheduleText += `-----|------|---|---|---|---|----\n`;
+
+        standings.forEach(standing => {
+          scheduleText += `${standing.rank.toString().padStart(4)} | ${standing.teamName.padEnd(12)} | ${standing.played} | ${standing.won} | ${standing.lost} | ${standing.tied} | ${standing.points}\n`;
+        });
+      }
+    }
+
+    scheduleText += `\n🎾 Powered by PadelX`;
+    return scheduleText;
+  };
+
+  // Copy tournament schedule to clipboard
+  const copyTournamentSchedule = async () => {
+    const scheduleText = generateTournamentScheduleText();
+
+    try {
+      await navigator.clipboard.writeText(scheduleText);
+      toast.success('Tournament schedule copied to clipboard! 📋');
+    } catch (error) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = scheduleText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      toast.success('Tournament schedule copied to clipboard! 📋');
+    }
+  };
+
+  // Share tournament schedule via WhatsApp
+  const shareTournamentSchedule = () => {
+    const scheduleText = generateTournamentScheduleText();
+    const encodedText = encodeURIComponent(scheduleText);
+    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+
+    window.open(whatsappUrl, '_blank');
   };
 
   const handleStartMatch = (match: TournamentMatch) => {
@@ -503,15 +579,117 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
               <span>{currentTournament.name}</span>
             </h1>
             <p className="mt-2 text-gray-600 dark:text-gray-400">
-              {currentTournament.type === 'single-elimination' ? 'Single Elimination' : 'Tournament'} •
+              {currentTournament.type === 'round-robin' ? 'Round-Robin Mode' :
+               currentTournament.type === 'single-elimination' ? 'Single Elimination' : 'Tournament'} •
               Round {currentTournament.currentRound} of {currentTournament.totalRounds} •
               {currentTournament.status === 'completed' ? 'Completed' : 'Active'}
             </p>
           </div>
 
-
+          {/* Copy and Share Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={copyTournamentSchedule}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            >
+              <Copy className="w-4 h-4" />
+              <span>Copy Schedule</span>
+            </button>
+            <button
+              onClick={shareTournamentSchedule}
+              className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Share on WhatsApp</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Round-Robin Standings (only for round-robin tournaments) */}
+      {currentTournament.type === 'round-robin' && (
+        <div className="card p-6 mb-8">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
+            <Trophy className="w-5 h-5 text-yellow-500" />
+            <span>Current Standings</span>
+          </h3>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Rank</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Team</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">P</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">W</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">L</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">T</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">Pts</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-white">Diff</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const standings = calculateRoundRobinStandings(currentTournament, players);
+                  return standings.map((standing, index) => (
+                    <tr key={standing.teamId} className={`border-b border-gray-100 dark:border-gray-700 ${
+                      standing.rank === 1 ? 'bg-yellow-50 dark:bg-yellow-900/20' :
+                      standing.rank === 2 ? 'bg-gray-50 dark:bg-gray-800/50' :
+                      standing.rank === 3 ? 'bg-orange-50 dark:bg-orange-900/20' : ''
+                    }`}>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center space-x-2">
+                          {standing.rank === 1 && <Trophy className="w-4 h-4 text-yellow-500" />}
+                          {standing.rank === 2 && <span className="text-lg">🥈</span>}
+                          {standing.rank === 3 && <span className="text-lg">🥉</span>}
+                          <span className={`font-bold ${
+                            standing.rank === 1 ? 'text-yellow-600 dark:text-yellow-400' :
+                            standing.rank === 2 ? 'text-gray-600 dark:text-gray-400' :
+                            standing.rank === 3 ? 'text-orange-600 dark:text-orange-400' :
+                            'text-gray-900 dark:text-white'
+                          }`}>
+                            {standing.rank}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">
+                        {standing.teamName}
+                      </td>
+                      <td className="text-center py-3 px-4 text-gray-600 dark:text-gray-400">
+                        {standing.played}
+                      </td>
+                      <td className="text-center py-3 px-4 text-green-600 dark:text-green-400 font-medium">
+                        {standing.won}
+                      </td>
+                      <td className="text-center py-3 px-4 text-red-600 dark:text-red-400 font-medium">
+                        {standing.lost}
+                      </td>
+                      <td className="text-center py-3 px-4 text-blue-600 dark:text-blue-400 font-medium">
+                        {standing.tied}
+                      </td>
+                      <td className="text-center py-3 px-4 font-bold text-indigo-600 dark:text-indigo-400">
+                        {standing.points}
+                      </td>
+                      <td className={`text-center py-3 px-4 font-medium ${
+                        standing.pointsDifference > 0 ? 'text-green-600 dark:text-green-400' :
+                        standing.pointsDifference < 0 ? 'text-red-600 dark:text-red-400' :
+                        'text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {standing.pointsDifference > 0 ? '+' : ''}{standing.pointsDifference}
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+            <p><strong>Scoring:</strong> Win = 3 points, Tie = 1 point, Loss = 0 points</p>
+            <p><strong>Tie-breakers:</strong> Points → Points Difference → Points For</p>
+          </div>
+        </div>
+      )}
 
       {/* Tournament Bracket */}
       <div className="space-y-8">

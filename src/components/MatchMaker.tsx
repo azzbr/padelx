@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Player, MatchPreview, MatchmakingMode, Match, Session, Tournament } from '../types';
-import { generateMatches, generateMatchesWithDuplicatePrevention, generateId, calculateMatchQuality, getQualityRating, generateTournamentBracket } from '../utils/matchmaking';
+import { generateMatches, generateMatchesWithDuplicatePrevention, generateId, calculateMatchQuality, getQualityRating, generateTournamentBracket, generateRoundRobinBracket, generateTournamentName } from '../utils/matchmaking';
 import {
   Target,
   Dice6,
@@ -77,6 +77,14 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
       color: 'bg-purple-600',
       recommended: false,
     },
+    {
+      id: 'round-robin' as MatchmakingMode,
+      title: 'Round-Robin Mode',
+      description: 'All teams play each other - points-based scoring system',
+      icon: Users,
+      color: 'bg-orange-500',
+      recommended: false,
+    },
   ];
 
   // Generate matches with selected algorithm
@@ -118,6 +126,34 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
         setCurrentTournament(tournament);
 
         toast.success(`🏆 Tournament created with ${tournamentBracket[0].length} first-round matches!`);
+
+        // Navigate to tournament view
+        onViewChange('tournament');
+      } else if (mode === 'round-robin') {
+        // Special handling for round-robin mode
+        const tournamentBracket = generateRoundRobinBracket(playersToUse, 'regular-doubles');
+
+        // Create round-robin tournament
+        const tournament: Tournament = {
+          id: generateId(),
+          name: generateTournamentName(),
+          type: 'round-robin',
+          roundRobinFormat: 'regular-doubles',
+          status: 'active',
+          currentRound: 1,
+          totalRounds: tournamentBracket.length,
+          players: playersToUse.map(p => p.id),
+          bracket: tournamentBracket,
+          roundRobinStandings: [], // Will be calculated as matches are played
+          createdAt: new Date().toISOString(),
+        };
+
+        // Add tournament to state
+        addTournament(tournament);
+        setCurrentTournament(tournament);
+
+        const totalMatches = tournamentBracket.flat().length;
+        toast.success(`🎯 Round-Robin Mode created with ${totalMatches} matches across ${tournamentBracket.length} rounds!`);
 
         // Navigate to tournament view
         onViewChange('tournament');
