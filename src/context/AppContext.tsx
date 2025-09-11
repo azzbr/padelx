@@ -185,24 +185,37 @@ const AppContext = createContext<{
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const dataLoadedRef = useRef(false);
+  const isInitialMountRef = useRef(true);
 
-// Load data on mount with retry logic and React Strict Mode protection
+// Load data on mount with improved React Strict Mode protection and timing
 useEffect(() => {
-  // Prevent double loading in React Strict Mode
-  if (dataLoadedRef.current) {
-    console.log('🚫 Data already loaded, skipping duplicate load (React Strict Mode)');
+  // Prevent double loading in React Strict Mode and ensure we only load once
+  if (dataLoadedRef.current || !isInitialMountRef.current) {
+    console.log('🚫 Data already loaded or not initial mount, skipping load');
     return;
   }
 
-  const loadDataWithRetry = (retries = 3) => {
+  const loadDataWithRetry = async (retries = 3) => {
     try {
       console.log('🔄 Loading data from localStorage...');
 
       // Check if localStorage is available
       if (typeof Storage === 'undefined') {
         console.error('❌ localStorage not available');
+        dispatch({ type: 'LOAD_DATA' }); // Load with defaults
         return;
       }
+
+      // Wait for localStorage to be ready (important for some browsers)
+      await new Promise(resolve => {
+        if (document.readyState === 'complete') {
+          resolve(void 0);
+        } else {
+          window.addEventListener('load', resolve, { once: true });
+          // Fallback timeout
+          setTimeout(resolve, 100);
+        }
+      });
 
       // Load data with validation
       const players = getPlayers();
@@ -224,30 +237,42 @@ useEffect(() => {
         console.error('❌ Invalid data structure loaded from localStorage');
         if (retries > 0) {
           console.log(`🔄 Retrying data load... (${retries} attempts left)`);
-          setTimeout(() => loadDataWithRetry(retries - 1), 100);
+          setTimeout(() => loadDataWithRetry(retries - 1), 200);
           return;
         }
+        // If all retries failed, load with defaults
+        dispatch({ type: 'LOAD_DATA' });
+        return;
       }
 
-      dispatch({ type: 'LOAD_DATA' });
+      // Dispatch the loaded data
+      dispatch({
+        type: 'LOAD_DATA'
+      });
+
       dataLoadedRef.current = true; // Mark as loaded
+      isInitialMountRef.current = false;
       console.log('✅ Data loaded successfully');
 
     } catch (error) {
       console.error('❌ Error loading data:', error);
       if (retries > 0) {
         console.log(`🔄 Retrying data load... (${retries} attempts left)`);
-        setTimeout(() => loadDataWithRetry(retries - 1), 100);
+        setTimeout(() => loadDataWithRetry(retries - 1), 200);
+      } else {
+        // If all retries failed, load with defaults
+        dispatch({ type: 'LOAD_DATA' });
       }
     }
   };
 
-  // Small delay to ensure localStorage is ready
-  const timer = setTimeout(() => {
-    loadDataWithRetry();
-  }, 50);
+  // Load data immediately but wait for DOM ready
+  loadDataWithRetry();
 
-  return () => clearTimeout(timer);
+  // Cleanup function
+  return () => {
+    isInitialMountRef.current = false;
+  };
 }, []);
 
   // Apply dark mode
@@ -259,25 +284,55 @@ useEffect(() => {
     }
   }, [state.settings.darkMode]);
 
-  // Persistence effects
+  // Persistence effects with improved error handling and debouncing
   useEffect(() => {
-    savePlayers(state.players);
+    if (dataLoadedRef.current) {
+      const timeoutId = setTimeout(() => {
+        console.log('💾 Saving players:', state.players.length);
+        savePlayers(state.players);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
   }, [state.players]);
 
   useEffect(() => {
-    saveMatches(state.matches);
+    if (dataLoadedRef.current) {
+      const timeoutId = setTimeout(() => {
+        console.log('💾 Saving matches:', state.matches.length);
+        saveMatches(state.matches);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
   }, [state.matches]);
 
   useEffect(() => {
-    saveSessions(state.sessions);
+    if (dataLoadedRef.current) {
+      const timeoutId = setTimeout(() => {
+        console.log('💾 Saving sessions:', state.sessions.length);
+        saveSessions(state.sessions);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
   }, [state.sessions]);
 
   useEffect(() => {
-    saveSettings(state.settings);
+    if (dataLoadedRef.current) {
+      const timeoutId = setTimeout(() => {
+        console.log('💾 Saving settings');
+        saveSettings(state.settings);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
   }, [state.settings]);
 
   useEffect(() => {
-    saveTournaments(state.tournaments);
+    if (dataLoadedRef.current) {
+      const timeoutId = setTimeout(() => {
+        console.log('💾 Saving tournaments:', state.tournaments.length);
+        saveTournaments(state.tournaments);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
   }, [state.tournaments]);
 
   return (

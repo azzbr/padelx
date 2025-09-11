@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp, useAppActions } from '../context/AppContext';
 import { ArrowLeft, Save, RotateCcw, Settings as SettingsIcon } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-interface SettingsProps {
-  onViewChange: (view: string) => void;
-}
-
-const Settings: React.FC<SettingsProps> = ({ onViewChange }) => {
+const Settings: React.FC = () => {
+  const navigate = useNavigate();
   const { state } = useApp();
   const { updateSettings } = useAppActions();
 
@@ -57,7 +55,7 @@ const Settings: React.FC<SettingsProps> = ({ onViewChange }) => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => onViewChange('dashboard')}
+              onClick={() => navigate('/dashboard')}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               <ArrowLeft className="w-6 h-6" />

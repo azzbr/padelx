@@ -20,13 +20,13 @@ function getFromStorage<T>(key: string, defaultValue: T): T {
   try {
     // Check if localStorage is available
     if (typeof Storage === 'undefined') {
-      console.warn('localStorage not available');
+      console.warn('🚫 localStorage not available');
       return defaultValue;
     }
 
     const item = localStorage.getItem(key);
     if (!item) {
-      console.log(`No data found for key "${key}", using default`);
+      console.log(`📭 No data found for key "${key}", using default`);
       return defaultValue;
     }
 
@@ -34,12 +34,12 @@ function getFromStorage<T>(key: string, defaultValue: T): T {
 
     // Validate the parsed data structure
     if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
-      console.error(`Invalid data structure for key "${key}": expected array, got ${typeof parsed}`);
+      console.error(`❌ Invalid data structure for key "${key}": expected array, got ${typeof parsed}`);
       return defaultValue;
     }
 
     if (typeof defaultValue === 'object' && defaultValue !== null && (typeof parsed !== 'object' || parsed === null)) {
-      console.error(`Invalid data structure for key "${key}": expected object, got ${typeof parsed}`);
+      console.error(`❌ Invalid data structure for key "${key}": expected object, got ${typeof parsed}`);
       return defaultValue;
     }
 

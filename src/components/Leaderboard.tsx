@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  ArrowLeft, 
-  Trophy, 
-  Medal, 
-  TrendingUp, 
-  Users, 
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Trophy,
+  Medal,
+  TrendingUp,
+  Users,
   Target,
   Award,
   Star,
@@ -17,10 +18,6 @@ import { useApp } from '../context/AppContext';
 import { Player } from '../types';
 import { rankPlayers, calculateWinRate, formatStreak } from '../utils/calculations';
 
-interface LeaderboardProps {
-  onViewChange: (view: string) => void;
-}
-
 interface PlayerWithRank extends Player {
   rank: number;
   winRate: number;
@@ -29,7 +26,8 @@ interface PlayerWithRank extends Player {
   recentPoints: number;
 }
 
-const Leaderboard: React.FC<LeaderboardProps> = ({ onViewChange }) => {
+const Leaderboard: React.FC = () => {
+  const navigate = useNavigate();
   const { state } = useApp();
   const [timePeriod, setTimePeriod] = useState<'alltime' | 'last30days'>('alltime');
   const [sortBy, setSortBy] = useState<'points' | 'winrate' | 'games' | 'streak'>('points');
@@ -144,7 +142,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ onViewChange }) => {
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="flex items-center mb-8">
             <button
-              onClick={() => onViewChange('dashboard')}
+              onClick={() => navigate('/dashboard')}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mr-4"
             >
               <ArrowLeft className="w-6 h-6" />
@@ -161,7 +159,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ onViewChange }) => {
               Add some players and complete matches to see rankings
             </p>
             <button
-              onClick={() => onViewChange('players')}
+              onClick={() => navigate('/players')}
               className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
             >
               Add Players
@@ -179,7 +177,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ onViewChange }) => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center">
             <button
-              onClick={() => onViewChange('dashboard')}
+              onClick={() => navigate('/dashboard')}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mr-4"
             >
               <ArrowLeft className="w-6 h-6" />
