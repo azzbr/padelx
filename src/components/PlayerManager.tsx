@@ -21,11 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-interface PlayerManagerProps {
-  onViewChange: (view: string) => void;
-}
-
-export default function PlayerManager({ onViewChange }: PlayerManagerProps) {
+export default function PlayerManager() {
   const { state } = useApp();
   const { addPlayer, updatePlayer, deletePlayer, loadSampleData } = useAppActions();
   

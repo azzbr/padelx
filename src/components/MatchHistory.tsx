@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  ArrowLeft, 
-  Search, 
-  Download, 
-  Copy, 
-  ChevronDown, 
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Search,
+  Download,
+  Copy,
+  ChevronDown,
   ChevronRight,
   Calendar,
   Clock,
@@ -18,17 +19,14 @@ import { Session, Match, Player } from '../types';
 import { generateMatchSummary } from '../utils/calculations';
 import { toast } from 'react-toastify';
 
-interface MatchHistoryProps {
-  onViewChange: (view: string) => void;
-}
-
 interface SessionWithMatches extends Session {
   sessionMatches: Match[];
   duration?: string;
   averageScore?: string;
 }
 
-const MatchHistory: React.FC<MatchHistoryProps> = ({ onViewChange }) => {
+const MatchHistory: React.FC = () => {
+  const navigate = useNavigate();
   const { state } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
@@ -221,7 +219,7 @@ const MatchHistory: React.FC<MatchHistoryProps> = ({ onViewChange }) => {
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="flex items-center mb-8">
             <button
-              onClick={() => onViewChange('dashboard')}
+              onClick={() => navigate('/dashboard')}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mr-4"
             >
               <ArrowLeft className="w-6 h-6" />
@@ -238,7 +236,7 @@ const MatchHistory: React.FC<MatchHistoryProps> = ({ onViewChange }) => {
               Complete some matches to see your history here
             </p>
             <button
-              onClick={() => onViewChange('matchmaker')}
+              onClick={() => navigate('/matchmaker')}
               className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
             >
               Start New Session
@@ -256,7 +254,7 @@ const MatchHistory: React.FC<MatchHistoryProps> = ({ onViewChange }) => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center">
             <button
-              onClick={() => onViewChange('dashboard')}
+              onClick={() => navigate('/dashboard')}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mr-4"
             >
               <ArrowLeft className="w-6 h-6" />

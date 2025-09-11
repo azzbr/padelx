@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Undo2, Play, Pause, Trophy, Clock, Copy, Edit3, Check, X, Minimize2, RotateCcw } from 'lucide-react';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Match, Player, GamePoint } from '../types';
 import { updateTournamentWithResult } from '../utils/matchmaking';
 import { toast } from 'react-toastify';
 
-interface LiveMatchProps {
-  onViewChange: (view: string) => void;
-}
-
-const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
+const LiveMatch: React.FC = () => {
+  const navigate = useNavigate();
   const { state, dispatch } = useApp();
   const [activeMatches, setActiveMatches] = useState<Match[]>([]);
   const [matchTimers, setMatchTimers] = useState<{ [matchId: string]: number }>({});
@@ -21,7 +19,7 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
     // Get current session's matches
     const currentSession = state.sessions.find(s => s.status === 'active');
     if (!currentSession) {
-      onViewChange('matchmaker');
+      navigate('/matchmaker');
       return;
     }
 
@@ -39,7 +37,7 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
       }
     });
     setMatchTimers(timers);
-  }, [state.matches, state.sessions, onViewChange]);
+  }, [state.matches, state.sessions, navigate]);
 
   useEffect(() => {
     // Update timers every second for live matches
@@ -354,7 +352,7 @@ const LiveMatch: React.FC<LiveMatchProps> = ({ onViewChange }) => {
     const tiedCount = updatedMatches.filter(m => !m.winner).length;
 
     toast.success(`Session finished! ${completedCount} matches completed, ${winnerCount} with winners, ${tiedCount} tied.`);
-    onViewChange('history');
+    navigate('/history');
   };
 
   const getTeamBalance = (match: Match): { difference: number; color: string; label: string } => {
@@ -496,7 +494,7 @@ First to ${state.settings.gamesToWin} games wins - ${Math.max(match.teamA.gamesW
               Create a new session to start playing matches.
             </p>
             <button
-              onClick={() => onViewChange('matchmaker')}
+              onClick={() => navigate('/matchmaker')}
               className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
             >
               Create New Session
@@ -514,7 +512,7 @@ First to ${state.settings.gamesToWin} games wins - ${Math.max(match.teamA.gamesW
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => onViewChange('dashboard')}
+              onClick={() => navigate('/dashboard')}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               <ArrowLeft className="w-6 h-6" />
