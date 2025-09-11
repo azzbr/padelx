@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import { Player, Match, Session, AppSettings, MatchmakingMode, Tournament } from '../types';
 import {
   getPlayers,
@@ -90,55 +90,45 @@ function appReducer(state: AppState, action: AppAction): AppState {
     
     case 'ADD_PLAYER':
       const newPlayers = [...state.players, action.payload];
-      savePlayers(newPlayers);
       return { ...state, players: newPlayers };
-    
+
     case 'UPDATE_PLAYER':
-      const updatedPlayers = state.players.map(p => 
+      const updatedPlayers = state.players.map(p =>
         p.id === action.payload.id ? action.payload : p
       );
-      savePlayers(updatedPlayers);
       return { ...state, players: updatedPlayers };
-    
+
     case 'DELETE_PLAYER':
       const filteredPlayers = state.players.filter(p => p.id !== action.payload);
-      savePlayers(filteredPlayers);
       return { ...state, players: filteredPlayers };
-    
+
     case 'SET_PLAYERS':
-      savePlayers(action.payload);
       return { ...state, players: action.payload };
     
     case 'ADD_MATCH':
       const newMatches = [...state.matches, action.payload];
-      saveMatches(newMatches);
       return { ...state, matches: newMatches };
-    
+
     case 'UPDATE_MATCH':
-      const updatedMatches = state.matches.map(m => 
+      const updatedMatches = state.matches.map(m =>
         m.id === action.payload.id ? action.payload : m
       );
-      saveMatches(updatedMatches);
       return { ...state, matches: updatedMatches };
-    
+
     case 'SET_MATCHES':
-      saveMatches(action.payload);
       return { ...state, matches: action.payload };
     
     case 'ADD_SESSION':
       const newSessions = [...state.sessions, action.payload];
-      saveSessions(newSessions);
       return { ...state, sessions: newSessions };
-    
+
     case 'UPDATE_SESSION':
-      const updatedSessions = state.sessions.map(s => 
+      const updatedSessions = state.sessions.map(s =>
         s.id === action.payload.id ? action.payload : s
       );
-      saveSessions(updatedSessions);
       return { ...state, sessions: updatedSessions };
-    
+
     case 'SET_SESSIONS':
-      saveSessions(action.payload);
       return { ...state, sessions: action.payload };
     
     case 'SET_CURRENT_SESSION':
@@ -146,7 +136,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'ADD_TOURNAMENT':
       const newTournaments = [...state.tournaments, action.payload];
-      addTournamentToStorage(action.payload);
       return { ...state, tournaments: newTournaments };
 
     case 'UPDATE_TOURNAMENT':
@@ -157,7 +146,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const updatedCurrentTournament = state.currentTournament?.id === action.payload.id
         ? action.payload
         : state.currentTournament;
-      updateTournamentInStorage(action.payload);
       return {
         ...state,
         tournaments: updatedTournaments,
@@ -171,14 +159,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, currentTournament: action.payload };
 
     case 'UPDATE_SETTINGS':
-      saveSettings(action.payload);
       return { ...state, settings: action.payload };
     
     case 'LOAD_SAMPLE_DATA':
       const sampleData = generateSampleData();
-      savePlayers(sampleData.players);
-      saveMatches(sampleData.matches);
-      saveSessions(sampleData.sessions);
       return {
         ...state,
         players: sampleData.players,
@@ -200,11 +184,71 @@ const AppContext = createContext<{
 // Provider component
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const dataLoadedRef = useRef(false);
 
-  // Load data on mount
-  useEffect(() => {
-    dispatch({ type: 'LOAD_DATA' });
-  }, []);
+// Load data on mount with retry logic and React Strict Mode protection
+useEffect(() => {
+  // Prevent double loading in React Strict Mode
+  if (dataLoadedRef.current) {
+    console.log('🚫 Data already loaded, skipping duplicate load (React Strict Mode)');
+    return;
+  }
+
+  const loadDataWithRetry = (retries = 3) => {
+    try {
+      console.log('🔄 Loading data from localStorage...');
+
+      // Check if localStorage is available
+      if (typeof Storage === 'undefined') {
+        console.error('❌ localStorage not available');
+        return;
+      }
+
+      // Load data with validation
+      const players = getPlayers();
+      const matches = getMatches();
+      const sessions = getSessions();
+      const tournaments = getTournaments();
+      const settings = getSettings();
+
+      console.log('📊 Loaded data:', {
+        players: players.length,
+        matches: matches.length,
+        sessions: sessions.length,
+        tournaments: tournaments.length,
+        settings: !!settings
+      });
+
+      // Validate loaded data
+      if (!Array.isArray(players) || !Array.isArray(matches) || !Array.isArray(sessions) || !Array.isArray(tournaments)) {
+        console.error('❌ Invalid data structure loaded from localStorage');
+        if (retries > 0) {
+          console.log(`🔄 Retrying data load... (${retries} attempts left)`);
+          setTimeout(() => loadDataWithRetry(retries - 1), 100);
+          return;
+        }
+      }
+
+      dispatch({ type: 'LOAD_DATA' });
+      dataLoadedRef.current = true; // Mark as loaded
+      console.log('✅ Data loaded successfully');
+
+    } catch (error) {
+      console.error('❌ Error loading data:', error);
+      if (retries > 0) {
+        console.log(`🔄 Retrying data load... (${retries} attempts left)`);
+        setTimeout(() => loadDataWithRetry(retries - 1), 100);
+      }
+    }
+  };
+
+  // Small delay to ensure localStorage is ready
+  const timer = setTimeout(() => {
+    loadDataWithRetry();
+  }, 50);
+
+  return () => clearTimeout(timer);
+}, []);
 
   // Apply dark mode
   useEffect(() => {
@@ -214,6 +258,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.documentElement.classList.remove('dark');
     }
   }, [state.settings.darkMode]);
+
+  // Persistence effects
+  useEffect(() => {
+    savePlayers(state.players);
+  }, [state.players]);
+
+  useEffect(() => {
+    saveMatches(state.matches);
+  }, [state.matches]);
+
+  useEffect(() => {
+    saveSessions(state.sessions);
+  }, [state.sessions]);
+
+  useEffect(() => {
+    saveSettings(state.settings);
+  }, [state.settings]);
+
+  useEffect(() => {
+    saveTournaments(state.tournaments);
+  }, [state.tournaments]);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>

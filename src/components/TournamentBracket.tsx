@@ -1,30 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Tournament, TournamentMatch, Player, Match, Session, RoundRobinStanding } from '../types';
 import { Trophy, Play, CheckCircle, Clock, Users, Target, Plus, Minus, Copy, Share2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { generateId, updateTournamentWithResult, calculateRoundRobinStandings, updateRoundRobinTournamentWithResult } from '../utils/matchmaking';
 
-// Safe deep copy function that handles complex objects
-function deepCopy(obj: any): any {
-  if (obj === null || typeof obj !== 'object') return obj;
-  if (obj instanceof Date) return new Date(obj.getTime());
-  if (Array.isArray(obj)) return obj.map(item => deepCopy(item));
+// Use structuredClone for safe deep copying (widely supported in modern browsers)
 
-  const copiedObj: any = {};
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      copiedObj[key] = deepCopy(obj[key]);
-    }
-  }
-  return copiedObj;
-}
-
-interface TournamentBracketProps {
-  onViewChange: (view: string) => void;
-}
-
-export default function TournamentBracket({ onViewChange }: TournamentBracketProps) {
+export default function TournamentBracket() {
   const { state } = useApp();
   const { updateTournament, addMatch, addSession, setCurrentSession, updatePlayer } = useAppActions();
 
@@ -44,17 +27,45 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
             Create a tournament in Match Maker to get started
           </p>
           <button
-            onClick={() => onViewChange('matchmaker')}
+            onClick={() => window.location.href = '/matchmaker'}
             className="btn btn-primary"
           >
             Go to Match Maker
           </button>
         </div>
-      </div>
-    );
-  }
+    </div>
+  );
+}
 
   const playerMap = new Map(players.map(p => [p.id, p]));
+
+  // Memoize expensive calculations
+  const roundRobinStandings = useMemo(() => {
+    if (currentTournament.type === 'round-robin') {
+      return calculateRoundRobinStandings(currentTournament, players);
+    }
+    return [];
+  }, [currentTournament, players]);
+
+  const totalTournamentPoints = useMemo(() => {
+    return currentTournament.bracket.reduce((total, round) => {
+      return total + round.reduce((roundTotal, match) => {
+        if (match.score) {
+          return roundTotal + match.score.teamA + match.score.teamB;
+        }
+        return roundTotal;
+      }, 0);
+    }, 0);
+  }, [currentTournament.bracket]);
+
+  const tournamentStats = useMemo(() => {
+    const matches = currentTournament.bracket.flat();
+    return {
+      completed: matches.filter(m => m.status === 'completed').length,
+      inProgress: matches.filter(m => m.status === 'in-progress').length,
+      pending: matches.filter(m => m.status === 'pending').length,
+    };
+  }, [currentTournament.bracket]);
 
   const getMatchStatus = (match: TournamentMatch) => {
     if (match.status === 'completed') {
@@ -232,7 +243,7 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
     if (matchIndex === -1) return;
 
     // Create a deep copy of the tournament to avoid reference issues
-    const updatedTournament = deepCopy(currentTournament);
+    const updatedTournament = structuredClone(currentTournament);
     const currentMatch = updatedTournament.bracket[roundIndex][matchIndex];
 
     // Prevent scoring on completed matches
@@ -392,7 +403,7 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
     if (matchIndex === -1) return;
 
     // Create a deep copy of the tournament to avoid reference issues
-    const updatedTournament = deepCopy(currentTournament);
+    const updatedTournament = structuredClone(currentTournament);
     const currentMatch = updatedTournament.bracket[roundIndex][matchIndex];
 
     // Initialize score if not exists
@@ -664,12 +675,7 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
                 </tr>
               </thead>
               <tbody>
-                {(() => {
-                  const standings = calculateRoundRobinStandings(currentTournament, players);
-                  console.log('Calculated standings:', standings);
-                  console.log('Tournament bracket:', currentTournament.bracket);
-                  console.log('Current tournament:', currentTournament);
-                  return standings.map((standing, index) => (
+                {roundRobinStandings.map((standing, index) => (
                     <tr key={standing.teamId} className={`border-b border-gray-100 dark:border-gray-700 ${
                       standing.rank === 1 ? 'bg-yellow-50 dark:bg-yellow-900/20' :
                       standing.rank === 2 ? 'bg-gray-50 dark:bg-gray-800/50' :
@@ -718,8 +724,7 @@ export default function TournamentBracket({ onViewChange }: TournamentBracketPro
                         </td>
                       )}
                     </tr>
-                  ));
-                })()}
+                  ))}
               </tbody>
             </table>
           </div>

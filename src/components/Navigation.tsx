@@ -1,23 +1,20 @@
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useApp, useAppActions } from '../context/AppContext';
-import { 
-  Home, 
-  Users, 
-  Shuffle, 
-  Play, 
-  History, 
-  Trophy, 
-  Moon, 
+import {
+  Home,
+  Users,
+  Shuffle,
+  Play,
+  History,
+  Trophy,
+  Moon,
   Sun,
   Settings
 } from 'lucide-react';
 
-interface NavigationProps {
-  currentView: string;
-  onViewChange: (view: string) => void;
-}
-
-export default function Navigation({ currentView, onViewChange }: NavigationProps) {
+export default function Navigation() {
+  const location = useLocation();
   const { state } = useApp();
   const { updateSettings } = useAppActions();
 
@@ -29,14 +26,18 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
   };
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'players', label: 'Players', icon: Users },
-    { id: 'matchmaker', label: 'Match Maker', icon: Shuffle },
-    { id: 'live', label: 'Live Matches', icon: Play },
-    { id: 'history', label: 'History', icon: History },
-    { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'dashboard', label: 'Dashboard', icon: Home, path: '/dashboard' },
+    { id: 'players', label: 'Players', icon: Users, path: '/players' },
+    { id: 'matchmaker', label: 'Match Maker', icon: Shuffle, path: '/matchmaker' },
+    { id: 'live', label: 'Live Matches', icon: Play, path: '/live' },
+    { id: 'history', label: 'History', icon: History, path: '/history' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: Trophy, path: '/leaderboard' },
+    { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
   ];
+
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
 
   return (
     <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
@@ -45,14 +46,16 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
           {/* Logo */}
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
-              <img 
-                src="/Benefit-New-Logo-Red-edited3.webp" 
-                alt="Benefit Logo" 
-                className="h-8 w-auto mr-3"
-              />
-              <h1 className="text-xl font-bold text-primary-600 dark:text-primary-400">
-                Padel X Team Maker
-              </h1>
+              <Link to="/dashboard" className="flex items-center">
+                <img
+                  src="/Benefit-New-Logo-Red-edited3.webp"
+                  alt="Benefit Logo"
+                  className="h-8 w-auto mr-3"
+                />
+                <h1 className="text-xl font-bold text-primary-600 dark:text-primary-400">
+                  Padel X Team Maker
+                </h1>
+              </Link>
             </div>
           </div>
 
@@ -61,17 +64,16 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
             <div className="ml-10 flex items-baseline space-x-4">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = currentView === item.id;
-                
+
                 return (
-                  <button
+                  <Link
                     key={item.id}
-                    onClick={() => onViewChange(item.id)}
-                    className={`nav-link ${isActive ? 'nav-link-active' : ''}`}
+                    to={item.path}
+                    className={`nav-link ${isActive(item.path) ? 'nav-link-active' : ''}`}
                   >
                     <Icon className="w-4 h-4 mr-2 inline" />
                     {item.label}
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -99,19 +101,18 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
             <div className="grid grid-cols-3 gap-2">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = currentView === item.id;
-                
+
                 return (
-                  <button
+                  <Link
                     key={item.id}
-                    onClick={() => onViewChange(item.id)}
+                    to={item.path}
                     className={`nav-link text-center flex flex-col items-center py-2 text-xs ${
-                      isActive ? 'nav-link-active' : ''
+                      isActive(item.path) ? 'nav-link-active' : ''
                     }`}
                   >
                     <Icon className="w-5 h-5 mb-1" />
                     {item.label}
-                  </button>
+                  </Link>
                 );
               })}
             </div>

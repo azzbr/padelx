@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Player, MatchPreview, MatchmakingMode, Match, Session, Tournament } from '../types';
 import { generateMatches, generateMatchesWithDuplicatePrevention, generateId, calculateMatchQuality, getQualityRating, generateTournamentBracket, generateRoundRobinBracket, generateTournamentName } from '../utils/matchmaking';
@@ -20,11 +21,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-interface MatchMakerProps {
-  onViewChange: (view: string) => void;
-}
-
-export default function MatchMaker({ onViewChange }: MatchMakerProps) {
+export default function MatchMaker() {
+  const navigate = useNavigate();
   const { state } = useApp();
   const { addMatch, addSession, setCurrentSession, addTournament, setCurrentTournament, updateSettings } = useAppActions();
 
@@ -129,7 +127,7 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
         toast.success(`🏆 Tournament created with ${tournamentBracket[0].length} first-round matches!`);
 
         // Navigate to tournament view
-        onViewChange('tournament');
+        navigate('/tournament');
       } else if (mode === 'round-robin') {
         // Special handling for round-robin mode
         const tournamentBracket = generateRoundRobinBracket(playersToUse, roundRobinFormat);
@@ -158,7 +156,7 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
         toast.success(`🎯 Round-Robin Mode (${formatName}) created with ${totalMatches} matches across ${tournamentBracket.length} rounds!`);
 
         // Navigate to tournament view
-        onViewChange('tournament');
+        navigate('/tournament');
       } else {
         // Regular matchmaking modes
         const matches = generateMatchesWithDuplicatePrevention(playersToUse, mode);
@@ -258,7 +256,7 @@ export default function MatchMaker({ onViewChange }: MatchMakerProps) {
       toast.success('Matches created successfully! Ready to start playing.');
       
       // Navigate to live matches
-      onViewChange('live');
+      navigate('/live');
       
     } catch (error) {
       toast.error('Failed to create matches. Please try again.');

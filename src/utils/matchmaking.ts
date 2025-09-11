@@ -3,7 +3,7 @@ import { getMatches, getSessions } from './storage';
 
 // Generate unique ID
 export function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  return crypto.randomUUID();
 }
 
 // Calculate team balance score (lower is better)
@@ -382,15 +382,10 @@ export function generateMatchesWithDuplicatePrevention(players: Player[], mode: 
     return generateMatches(players, mode);
   }
   
-  // Log freshness information
+  // Log freshness information (only in development)
   if (recentMatches.length > 0) {
-    console.log(`Generated matches with freshness score: ${bestScore}`);
-    bestMatches.forEach((match, index) => {
-      const freshness = calculateMatchFreshness(match.teamA, match.teamB, recentMatches);
-      if (freshness < 70) {
-        console.warn(`Match ${index + 1} has low freshness (${freshness}): Some players have played recently`);
-      }
-    });
+    // Removed console.log statements for production performance
+    // These were causing performance issues in render paths
   }
   
   return bestMatches;
@@ -1138,12 +1133,8 @@ export function calculateRoundRobinStandings(
   tournament: Tournament,
   players: Player[]
 ): RoundRobinStanding[] {
-  console.log('calculateRoundRobinStandings called with tournament:', tournament);
-  console.log('Tournament bracket:', tournament.bracket);
-
   // If standings are already calculated and stored, use them (prevents unnecessary recalculation)
   if (tournament.roundRobinStandings && tournament.roundRobinStandings.length > 0) {
-    console.log('Using cached standings:', tournament.roundRobinStandings);
     return tournament.roundRobinStandings;
   }
 
@@ -1168,25 +1159,15 @@ export function calculateRoundRobinStandings(
   // Map of teamId -> team name (use names stored on matches to avoid dependency on global players array)
   const teamNameMap = new Map<string, string>();
 
-  console.log('Processing matches...');
-
   // Process all completed matches
   tournament.bracket.forEach((round, roundIndex) => {
-    console.log(`Processing round ${roundIndex + 1}:`, round);
     round.forEach((match, matchIndex) => {
-      console.log(`Processing match ${matchIndex + 1}:`, match);
-      console.log(`Match status: ${match.status}, has score: ${!!match.score}, winner: ${match.winner}`);
-
       if (match.status === 'completed' && match.score) {
         const teamAId = `${match.teamA.player1Id}-${match.teamA.player2Id}`;
         const teamBId = `${match.teamB.player1Id}-${match.teamB.player2Id}`;
         // Capture team names from the tournament match data
         if (!teamNameMap.has(teamAId)) teamNameMap.set(teamAId, match.teamA.name || teamAId);
         if (!teamNameMap.has(teamBId)) teamNameMap.set(teamBId, match.teamB.name || teamBId);
-
-        console.log(`Team A ID: ${teamAId}, Team B ID: ${teamBId}`);
-        console.log(`Team A players: ${match.teamA.player1Id}, ${match.teamA.player2Id}`);
-        console.log(`Team B players: ${match.teamB.player1Id}, ${match.teamB.player2Id}`);
 
         // Initialize team stats if not exists
         if (!teamStats.has(teamAId)) {
@@ -1222,16 +1203,9 @@ export function calculateRoundRobinStandings(
           teamAStats.points += 1;
           teamBStats.points += 1;
         }
-
-        console.log(`Updated team A stats:`, teamAStats);
-        console.log(`Updated team B stats:`, teamBStats);
-      } else {
-        console.log(`Skipping match - not completed or no score`);
       }
     });
   });
-
-  console.log('Team stats after processing:', teamStats);
 
   // Convert to standings array (prefer team names from tournament data; don't depend on global players list)
   teamStats.forEach((stats, teamId) => {
@@ -1391,13 +1365,6 @@ export function updateRoundRobinTournamentWithResult(
   score: { teamA: number; teamB: number },
   players: Player[]
 ): Tournament {
-  console.log('updateRoundRobinTournamentWithResult called with:', {
-    matchId,
-    winner,
-    score,
-    tournamentId: tournament.id
-  });
-
   const updatedTournament = { ...tournament };
 
   // Find and update the match
@@ -1405,12 +1372,10 @@ export function updateRoundRobinTournamentWithResult(
   for (const round of updatedTournament.bracket) {
     const match = round.find(m => m.id === matchId);
     if (match) {
-      console.log('Found match to update:', match);
       match.winner = winner === 'tie' ? undefined : winner;
       match.status = 'completed';
       match.score = score;
       matchFound = true;
-      console.log('Updated match:', match);
       break;
     }
   }
@@ -1420,15 +1385,11 @@ export function updateRoundRobinTournamentWithResult(
   }
 
   // Recalculate standings
-  console.log('Recalculating standings...');
   updatedTournament.roundRobinStandings = calculateRoundRobinStandings(updatedTournament, players);
-  console.log('New standings:', updatedTournament.roundRobinStandings);
 
   // Check if tournament is complete (all matches played)
   const totalMatches = updatedTournament.bracket.flat().length;
   const completedMatches = updatedTournament.bracket.flat().filter(m => m.status === 'completed').length;
-
-  console.log(`Tournament progress: ${completedMatches}/${totalMatches} matches completed`);
 
   if (completedMatches === totalMatches) {
     updatedTournament.status = 'completed';
@@ -1438,11 +1399,9 @@ export function updateRoundRobinTournamentWithResult(
     if (updatedTournament.roundRobinStandings && updatedTournament.roundRobinStandings.length > 0) {
       const winner = updatedTournament.roundRobinStandings[0];
       updatedTournament.winner = winner.player1Id; // Store first player as representative
-      console.log('Tournament completed! Winner:', winner);
     }
   }
 
-  console.log('Returning updated tournament:', updatedTournament);
   return updatedTournament;
 }
 

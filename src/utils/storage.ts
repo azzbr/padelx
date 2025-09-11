@@ -15,22 +15,90 @@ const DEFAULT_SETTINGS: AppSettings = {
   darkMode: false,
 };
 
-// Generic storage functions
+// Generic storage functions with enhanced error handling
 function getFromStorage<T>(key: string, defaultValue: T): T {
   try {
+    // Check if localStorage is available
+    if (typeof Storage === 'undefined') {
+      console.warn('localStorage not available');
+      return defaultValue;
+    }
+
     const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
+    if (!item) {
+      console.log(`No data found for key "${key}", using default`);
+      return defaultValue;
+    }
+
+    const parsed = JSON.parse(item);
+
+    // Validate the parsed data structure
+    if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
+      console.error(`Invalid data structure for key "${key}": expected array, got ${typeof parsed}`);
+      return defaultValue;
+    }
+
+    if (typeof defaultValue === 'object' && defaultValue !== null && (typeof parsed !== 'object' || parsed === null)) {
+      console.error(`Invalid data structure for key "${key}": expected object, got ${typeof parsed}`);
+      return defaultValue;
+    }
+
+    console.log(`✅ Successfully loaded ${Array.isArray(parsed) ? parsed.length : 1} items for key "${key}"`);
+    return parsed;
   } catch (error) {
-    console.error(`Error reading from localStorage key "${key}":`, error);
+    console.error(`❌ Error reading from localStorage key "${key}":`, error);
+    // If parsing fails, clear the corrupted data
+    try {
+      localStorage.removeItem(key);
+      console.log(`🧹 Cleared corrupted data for key "${key}"`);
+    } catch (clearError) {
+      console.error(`Failed to clear corrupted data for key "${key}":`, clearError);
+    }
     return defaultValue;
   }
 }
 
 function saveToStorage<T>(key: string, data: T): void {
   try {
-    localStorage.setItem(key, JSON.stringify(data));
+    // Check if localStorage is available
+    if (typeof Storage === 'undefined') {
+      console.warn('localStorage not available, cannot save data');
+      return;
+    }
+
+    // Validate data before saving
+    if (data === undefined) {
+      console.error(`Cannot save undefined data for key "${key}"`);
+      return;
+    }
+
+    const serialized = JSON.stringify(data);
+    localStorage.setItem(key, serialized);
+
+    console.log(`💾 Successfully saved data for key "${key}" (${serialized.length} bytes)`);
   } catch (error) {
-    console.error(`Error saving to localStorage key "${key}":`, error);
+    console.error(`❌ Error saving to localStorage key "${key}":`, error);
+
+    // If quota exceeded, try to clear old data and retry
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn('Storage quota exceeded, attempting to clear old data...');
+      try {
+        // Clear non-essential data first
+        const keysToClear = ['padel_matches', 'padel_sessions'];
+        keysToClear.forEach(keyToClear => {
+          if (keyToClear !== key) {
+            localStorage.removeItem(keyToClear);
+          }
+        });
+
+        // Retry saving
+        const serialized = JSON.stringify(data);
+        localStorage.setItem(key, serialized);
+        console.log(`✅ Successfully saved after clearing old data for key "${key}"`);
+      } catch (retryError) {
+        console.error('Failed to save even after clearing old data:', retryError);
+      }
+    }
   }
 }
 

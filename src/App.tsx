@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
@@ -13,37 +14,24 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
-  const [currentView, setCurrentView] = useState('dashboard');
-
-  const renderCurrentView = () => {
-    switch (currentView) {
-      case 'dashboard':
-        return <Dashboard onViewChange={setCurrentView} />;
-      case 'players':
-        return <PlayerManager onViewChange={setCurrentView} />;
-      case 'matchmaker':
-        return <MatchMaker onViewChange={setCurrentView} />;
-      case 'tournament':
-        return <TournamentBracket onViewChange={setCurrentView} />;
-      case 'live':
-        return <LiveMatch onViewChange={setCurrentView} />;
-      case 'history':
-        return <MatchHistory onViewChange={setCurrentView} />;
-      case 'leaderboard':
-        return <Leaderboard onViewChange={setCurrentView} />;
-      case 'settings':
-        return <Settings onViewChange={setCurrentView} />;
-      default:
-        return <Dashboard onViewChange={setCurrentView} />;
-    }
-  };
-
   return (
     <AppProvider>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Navigation currentView={currentView} onViewChange={setCurrentView} />
+        <Navigation />
         <main className="pb-8">
-          {renderCurrentView()}
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/players" element={<PlayerManager />} />
+            <Route path="/matchmaker" element={<MatchMaker />} />
+            <Route path="/tournament" element={<TournamentBracket />} />
+            <Route path="/live" element={<LiveMatch />} />
+            <Route path="/history" element={<MatchHistory />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/settings" element={<Settings />} />
+            {/* Catch all route - redirect to dashboard */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
         </main>
         <ToastContainer
           position="top-right"

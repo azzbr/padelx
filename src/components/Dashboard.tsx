@@ -1,37 +1,40 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp, useAppActions } from '../context/AppContext';
-import { 
-  Users, 
-  Calendar, 
-  Play, 
-  Trophy, 
-  Plus, 
+import {
+  Users,
+  Calendar,
+  Play,
+  Trophy,
+  Plus,
   Database,
   CheckCircle,
   Clock,
-  TrendingUp
+  TrendingUp,
+  Download,
+  Upload,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { rankPlayers, getTopPerformers, calculateWinRate } from '../utils/calculations';
+import { exportData, importData, clearAllData } from '../utils/storage';
 
-interface DashboardProps {
-  onViewChange: (view: string) => void;
-}
-
-export default function Dashboard({ onViewChange }: DashboardProps) {
+export default function Dashboard() {
+  const navigate = useNavigate();
   const { state } = useApp();
   const { loadSampleData } = useAppActions();
 
   // Calculate dashboard stats
-  const availableToday = state.players.filter(p => 
+  const availableToday = state.players.filter(p =>
     p.availability.includes(new Date().toISOString().split('T')[0])
   ).length;
 
   const liveMatches = state.matches.filter(m => m.status === 'live').length;
   const completedMatches = state.matches.filter(m => m.status === 'completed').length;
-  
+
   const rankedPlayers = rankPlayers(state.players);
   const topPerformers = getTopPerformers(state.players);
-  
+
   const recentMatches = state.matches
     .filter(m => m.status === 'completed')
     .sort((a, b) => new Date(b.endTime || '').getTime() - new Date(a.endTime || '').getTime())
@@ -42,14 +45,14 @@ export default function Dashboard({ onViewChange }: DashboardProps) {
       title: 'Add Player',
       description: 'Add a new player to the system',
       icon: Plus,
-      action: () => onViewChange('players'),
+      action: () => navigate('/players'),
       color: 'bg-blue-500',
     },
     {
       title: 'New Session',
       description: 'Start a new match session',
       icon: Play,
-      action: () => onViewChange('matchmaker'),
+      action: () => navigate('/matchmaker'),
       color: 'bg-green-500',
       disabled: availableToday < 16,
     },
@@ -57,7 +60,7 @@ export default function Dashboard({ onViewChange }: DashboardProps) {
       title: 'View History',
       description: 'Browse past matches',
       icon: Clock,
-      action: () => onViewChange('history'),
+      action: () => navigate('/history'),
       color: 'bg-purple-500',
     },
     {
@@ -193,7 +196,7 @@ export default function Dashboard({ onViewChange }: DashboardProps) {
                 </div>
               ))}
               <button
-                onClick={() => onViewChange('leaderboard')}
+                onClick={() => navigate('/leaderboard')}
                 className="w-full mt-4 text-center text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
               >
                 View Full Leaderboard →
@@ -206,6 +209,112 @@ export default function Dashboard({ onViewChange }: DashboardProps) {
               <p className="text-sm text-gray-500 dark:text-gray-500">Complete some matches to see rankings</p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Data Management */}
+      <div className="mt-8">
+        <div className="card p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Data Management</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            Backup, restore, or reset your tournament data
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Export Data */}
+            <button
+              onClick={() => {
+                try {
+                  const data = exportData();
+                  const blob = new Blob([data], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `padel-data-${new Date().toISOString().split('T')[0]}.json`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  alert('✅ Data exported successfully!');
+                } catch (error) {
+                  console.error('Export failed:', error);
+                  alert('❌ Failed to export data');
+                }
+              }}
+              className="flex flex-col items-center p-4 border-2 border-dashed border-green-300 dark:border-green-600 rounded-lg hover:border-green-400 dark:hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors duration-200"
+            >
+              <Download className="w-8 h-8 text-green-600 dark:text-green-400 mb-2" />
+              <span className="font-medium text-gray-900 dark:text-white">Export Data</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400 text-center">Download backup</span>
+            </button>
+
+            {/* Import Data */}
+            <button
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (!file) return;
+
+                  const reader = new FileReader();
+                  reader.onload = (e) => {
+                    try {
+                      const data = e.target?.result as string;
+                      if (importData(data)) {
+                        alert('✅ Data imported successfully! Refreshing page...');
+                        window.location.reload();
+                      } else {
+                        alert('❌ Failed to import data - invalid format');
+                      }
+                    } catch (error) {
+                      console.error('Import failed:', error);
+                      alert('❌ Failed to import data');
+                    }
+                  };
+                  reader.readAsText(file);
+                };
+                input.click();
+              }}
+              className="flex flex-col items-center p-4 border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200"
+            >
+              <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400 mb-2" />
+              <span className="font-medium text-gray-900 dark:text-white">Import Data</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400 text-center">Restore from backup</span>
+            </button>
+
+            {/* Clear Data */}
+            <button
+              onClick={() => {
+                if (window.confirm('⚠️ Are you sure you want to clear ALL data? This cannot be undone!')) {
+                  if (window.confirm('🔴 This will permanently delete all players, matches, and settings. Are you absolutely sure?')) {
+                    clearAllData();
+                    alert('🗑️ All data cleared! Refreshing page...');
+                    window.location.reload();
+                  }
+                }
+              }}
+              className="flex flex-col items-center p-4 border-2 border-dashed border-red-300 dark:border-red-600 rounded-lg hover:border-red-400 dark:hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors duration-200"
+            >
+              <Trash2 className="w-8 h-8 text-red-600 dark:text-red-400 mb-2" />
+              <span className="font-medium text-gray-900 dark:text-white">Clear Data</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400 text-center">Reset everything</span>
+            </button>
+          </div>
+
+          <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
+            <div className="flex items-start">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
+              <div>
+                <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">Data Persistence</h3>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  Your data is automatically saved to your browser's local storage. If you're experiencing data loss on refresh,
+                  try the troubleshooting steps in the console logs or use the export/import features above.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -245,7 +354,7 @@ export default function Dashboard({ onViewChange }: DashboardProps) {
                 );
               })}
               <button
-                onClick={() => onViewChange('history')}
+                onClick={() => navigate('/history')}
                 className="w-full mt-4 text-center text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
               >
                 View All History →
