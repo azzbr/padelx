@@ -377,9 +377,9 @@ export function useAppActions() {
 // Generate sample data for testing
 function generateSampleData() {
   const samplePlayers: Player[] = [
-    'Salmeen', 'Nawaf', 'Khalid', 'Janahi', 'Bu Faisal', 'Badran', 'Bucheeri', 'Al Mannai',
-    'Ahmed', 'Omar', 'Faisal', 'Hamad', 'Saeed', 'Rashid', 'Yousef', 'Mansour',
-    'Abdulla', 'Abdul Qader', 'Ali', 'Aziz'
+    'Bucheeri', 'Badran', 'YousifJ', 'Nawaf', 'Bu Mannai', 'Aziz', 'OsamaB', 'AliAl',
+    'Ahmed', 'Omar', 'Faisal', 'Hamad', 'Saeed', 'Rashid', 'Qasim', 'Mansour',
+    'Abdulla', 'Abdul Qader', 'Ali', 'Janahi', 'Khalid', 'Salem', 'Talal', 'Zayed'
   ].map((name, index) => ({
     id: `player-${index + 1}`,
     name,
