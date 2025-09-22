@@ -121,13 +121,13 @@ export function getTopPerformers(players: Player[]): {
     current.stats.points > prev.stats.points ? current : prev
   , playersWithMatches[0] || null);
   
-  const bestWinRate = playersWithMatches
-    .filter(p => p.stats.matchesPlayed >= 3) // Minimum 3 matches for meaningful win rate
-    .reduce((prev, current) => {
+  const qualifiedPlayers = playersWithMatches.filter(p => p.stats.matchesPlayed >= 3);
+  const bestWinRate = qualifiedPlayers.length > 0 ?
+    qualifiedPlayers.reduce((prev, current) => {
       const prevRate = calculateWinRate(prev.stats.matchesWon, prev.stats.matchesPlayed);
       const currentRate = calculateWinRate(current.stats.matchesWon, current.stats.matchesPlayed);
       return currentRate > prevRate ? current : prev;
-    }, playersWithMatches[0] || null);
+    }, qualifiedPlayers[0]) : null;
   
   const longestStreak = playersWithMatches.reduce((prev, current) => 
     Math.abs(current.stats.currentStreak) > Math.abs(prev.stats.currentStreak) ? current : prev

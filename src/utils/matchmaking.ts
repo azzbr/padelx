@@ -1098,7 +1098,6 @@ function generateRoundRobinSchedule(
 
 // Generate switch-doubles round-robin schedule (rotating partners)
 function generateSwitchDoublesSchedule(players: Player[]): TournamentMatch[][] {
-  const rounds: TournamentMatch[][] = [];
   const numPlayers = players.length;
 
   // For switch-doubles, we need even number of players
@@ -1106,56 +1105,13 @@ function generateSwitchDoublesSchedule(players: Player[]): TournamentMatch[][] {
     throw new Error('Switch doubles requires even number of players');
   }
 
-  // Special handling for 8 players - use the proven circle method pattern
-  if (numPlayers === 8) {
-    return generateSwitchDoublesSchedule8Players(players);
+  // Currently only support 8 players with proven circle method
+  // TODO: Implement general circle method for other even player counts
+  if (numPlayers !== 8) {
+    throw new Error('Switch-doubles tournaments currently only support 8 players. Use regular-doubles for other player counts.');
   }
 
-  // For other even numbers, use general circle method
-  // Calculate rounds needed (each player plays with each other player once)
-  const roundsNeeded = numPlayers - 1;
-
-  // Use circle method: fix last player, arrange first n-1 in circle and pair adjacent
-  const fixedPlayer = players[numPlayers - 1];
-  let rotatingPlayers = players.slice(0, numPlayers - 1);
-
-  for (let round = 0; round < roundsNeeded; round++) {
-    const roundMatches: TournamentMatch[] = [];
-
-    // Create pairs by taking adjacent players in the circle
-    for (let i = 0; i < rotatingPlayers.length; i += 2) {
-      if (i + 1 < rotatingPlayers.length) {
-        const player1 = rotatingPlayers[i];
-        const player2 = rotatingPlayers[i + 1];
-
-        roundMatches.push({
-          id: generateId(),
-          round: round + 1,
-          matchNumber: Math.floor(i / 2) + 1,
-          court: `Court ${String.fromCharCode(65 + Math.floor(i / 2))}`,
-          teamA: {
-            player1Id: player1.id,
-            player2Id: player2.id,
-            name: `${player1.name} + ${player2.name}`
-          },
-          teamB: {
-            player1Id: fixedPlayer.id,
-            player2Id: rotatingPlayers[(i + 2) % rotatingPlayers.length].id,
-            name: `${fixedPlayer.name} + ${rotatingPlayers[(i + 2) % rotatingPlayers.length].name}`
-          },
-          status: 'pending'
-        });
-      }
-    }
-
-    rounds.push(roundMatches);
-
-    // Rotate: move last player to front
-    const lastPlayer = rotatingPlayers.pop()!;
-    rotatingPlayers.unshift(lastPlayer);
-  }
-
-  return rounds;
+  return generateSwitchDoublesSchedule8Players(players);
 }
 
 // Special implementation for 8 players using the proven circle method
@@ -1369,9 +1325,11 @@ function calculateSwitchDoublesStandings(
         [...teamAPlayers, ...teamBPlayers].forEach(playerId => {
           const stats = playerStats.get(playerId)!;
           stats.played++;
+
+          const isTeamA = teamAPlayers.includes(playerId);
           if (match.score) {
-            stats.pointsFor += match.score.teamA; // Individual points for scoring
-            stats.pointsAgainst += match.score.teamB;
+            stats.pointsFor += isTeamA ? match.score.teamA : match.score.teamB;
+            stats.pointsAgainst += isTeamA ? match.score.teamB : match.score.teamA;
           }
         });
 
