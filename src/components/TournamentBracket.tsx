@@ -83,7 +83,22 @@ export default function TournamentBracket() {
   };
 
   const getWinningTeamName = () => {
-    // Find the final match (last round, first match)
+    // For round-robin tournaments, use standings to determine winner
+    if (currentTournament.type === 'round-robin') {
+      if (roundRobinStandings.length > 0) {
+        const winner = roundRobinStandings[0];
+
+        // For switch-doubles format, winner is an individual player
+        if (currentTournament.roundRobinFormat === 'switch-doubles') {
+          return winner.teamName; // This is the individual player name
+        } else {
+          // For fixed teams format, winner is a team
+          return winner.teamName; // This is the team name
+        }
+      }
+    }
+
+    // Fallback for single-elimination tournaments (find winner of final match)
     const finalRound = currentTournament.bracket[currentTournament.bracket.length - 1];
     if (!finalRound || finalRound.length === 0) return 'Unknown Team';
 
@@ -639,8 +654,10 @@ export default function TournamentBracket() {
             <p className="mt-2 text-gray-600 dark:text-gray-400">
               {currentTournament.type === 'round-robin' ? 'Round-Robin Mode' :
                currentTournament.type === 'single-elimination' ? 'Single Elimination' : 'Tournament'} •
-              Round {currentTournament.currentRound} of {currentTournament.totalRounds} •
-              {currentTournament.status === 'completed' ? 'Completed' : 'Active'}
+              {currentTournament.status === 'completed'
+                ? `Completed • ${currentTournament.totalRounds} Rounds Played`
+                : `Round ${currentTournament.currentRound} of ${currentTournament.totalRounds} • Active`
+              }
             </p>
           </div>
 
@@ -817,9 +834,13 @@ export default function TournamentBracket() {
             </div>
 
             <div className="bg-white/20 backdrop-blur-sm rounded-xl p-6 mb-6">
-              <div className="text-sm font-medium text-yellow-100 mb-3 text-center">🥇 WINNING TEAM</div>
+              <div className="text-sm font-medium text-yellow-100 mb-3 text-center">
+                🥇 {currentTournament.type === 'round-robin' && currentTournament.roundRobinFormat === 'switch-doubles' ? 'WINNING PLAYER' : 'WINNING TEAM'}
+              </div>
               <div className="text-3xl font-bold text-white mb-3 text-center">{getWinningTeamName()}</div>
-              <div className="text-sm text-yellow-200 text-center">Champions of {currentTournament.name}</div>
+              <div className="text-sm text-yellow-200 text-center">
+                {currentTournament.type === 'round-robin' && currentTournament.roundRobinFormat === 'switch-doubles' ? 'Tournament Champion' : 'Champions'} of {currentTournament.name}
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-6 text-center mb-6">

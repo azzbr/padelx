@@ -1106,46 +1106,117 @@ function generateSwitchDoublesSchedule(players: Player[]): TournamentMatch[][] {
     throw new Error('Switch doubles requires even number of players');
   }
 
+  // Special handling for 8 players - use the proven circle method pattern
+  if (numPlayers === 8) {
+    return generateSwitchDoublesSchedule8Players(players);
+  }
+
+  // For other even numbers, use general circle method
   // Calculate rounds needed (each player plays with each other player once)
   const roundsNeeded = numPlayers - 1;
 
+  // Use circle method: fix last player, arrange first n-1 in circle and pair adjacent
+  const fixedPlayer = players[numPlayers - 1];
+  let rotatingPlayers = players.slice(0, numPlayers - 1);
+
   for (let round = 0; round < roundsNeeded; round++) {
     const roundMatches: TournamentMatch[] = [];
-    const availablePlayers = [...players];
 
-    // Shuffle players for this round to create different partnerships
-    for (let i = availablePlayers.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [availablePlayers[i], availablePlayers[j]] = [availablePlayers[j], availablePlayers[i]];
-    }
-
-    // Create matches by pairing players
-    for (let i = 0; i < availablePlayers.length; i += 4) {
-      if (i + 3 < availablePlayers.length) {
-        const player1 = availablePlayers[i];
-        const player2 = availablePlayers[i + 1];
-        const player3 = availablePlayers[i + 2];
-        const player4 = availablePlayers[i + 3];
+    // Create pairs by taking adjacent players in the circle
+    for (let i = 0; i < rotatingPlayers.length; i += 2) {
+      if (i + 1 < rotatingPlayers.length) {
+        const player1 = rotatingPlayers[i];
+        const player2 = rotatingPlayers[i + 1];
 
         roundMatches.push({
           id: generateId(),
           round: round + 1,
-          matchNumber: Math.floor(i / 4) + 1,
-          court: `Court ${String.fromCharCode(65 + Math.floor(i / 4))}`,
+          matchNumber: Math.floor(i / 2) + 1,
+          court: `Court ${String.fromCharCode(65 + Math.floor(i / 2))}`,
           teamA: {
             player1Id: player1.id,
             player2Id: player2.id,
             name: `${player1.name} + ${player2.name}`
           },
           teamB: {
-            player1Id: player3.id,
-            player2Id: player4.id,
-            name: `${player3.name} + ${player4.name}`
+            player1Id: fixedPlayer.id,
+            player2Id: rotatingPlayers[(i + 2) % rotatingPlayers.length].id,
+            name: `${fixedPlayer.name} + ${rotatingPlayers[(i + 2) % rotatingPlayers.length].name}`
           },
           status: 'pending'
         });
       }
     }
+
+    rounds.push(roundMatches);
+
+    // Rotate: move last player to front
+    const lastPlayer = rotatingPlayers.pop()!;
+    rotatingPlayers.unshift(lastPlayer);
+  }
+
+  return rounds;
+}
+
+// Special implementation for 8 players using the proven circle method
+function generateSwitchDoublesSchedule8Players(players: Player[]): TournamentMatch[][] {
+  const rounds: TournamentMatch[][] = [];
+
+  // For 8 players, we need 7 rounds
+  // Use the exact pattern from the user's specification
+  const playerPositions = [
+    [7, 6, 1, 5, 2, 4, 3], // Round 1: (8+7) vs (1+6), (2+5) vs (3+4)
+    [6, 5, 7, 4, 1, 3, 2], // Round 2: (8+6) vs (7+5), (1+4) vs (2+3)
+    [5, 4, 6, 3, 7, 2, 1], // Round 3: (8+5) vs (6+4), (7+3) vs (1+2)
+    [4, 3, 5, 2, 6, 1, 7], // Round 4: (8+4) vs (5+3), (6+2) vs (7+1)
+    [3, 2, 4, 1, 5, 7, 6], // Round 5: (8+3) vs (4+2), (5+1) vs (6+7)
+    [2, 1, 3, 7, 4, 6, 5], // Round 6: (8+2) vs (3+1), (4+7) vs (5+6)
+    [1, 7, 2, 6, 3, 5, 4]  // Round 7: (8+1) vs (2+7), (3+6) vs (4+5)
+  ];
+
+  const fixedPlayer = players[7]; // Player at index 7 (8th player, 1-indexed as 8)
+
+  for (let round = 0; round < 7; round++) {
+    const roundMatches: TournamentMatch[] = [];
+    const positions = playerPositions[round];
+
+    // Match 1: (8 + positions[0]) vs (positions[1] + positions[2])
+    roundMatches.push({
+      id: generateId(),
+      round: round + 1,
+      matchNumber: 1,
+      court: 'Court A',
+      teamA: {
+        player1Id: fixedPlayer.id,
+        player2Id: players[positions[0] - 1].id, // Convert 1-indexed to 0-indexed
+        name: `${fixedPlayer.name} + ${players[positions[0] - 1].name}`
+      },
+      teamB: {
+        player1Id: players[positions[1] - 1].id,
+        player2Id: players[positions[2] - 1].id,
+        name: `${players[positions[1] - 1].name} + ${players[positions[2] - 1].name}`
+      },
+      status: 'pending'
+    });
+
+    // Match 2: (positions[3] + positions[4]) vs (positions[5] + positions[6])
+    roundMatches.push({
+      id: generateId(),
+      round: round + 1,
+      matchNumber: 2,
+      court: 'Court B',
+      teamA: {
+        player1Id: players[positions[3] - 1].id,
+        player2Id: players[positions[4] - 1].id,
+        name: `${players[positions[3] - 1].name} + ${players[positions[4] - 1].name}`
+      },
+      teamB: {
+        player1Id: players[positions[5] - 1].id,
+        player2Id: players[positions[6] - 1].id,
+        name: `${players[positions[5] - 1].name} + ${players[positions[6] - 1].name}`
+      },
+      status: 'pending'
+    });
 
     rounds.push(roundMatches);
   }
