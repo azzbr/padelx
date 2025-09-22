@@ -344,6 +344,11 @@ export default function TournamentBracket() {
     const winningTeam = match.winner === 'teamA' ? match.teamA : match.teamB;
     const losingTeam = match.winner === 'teamA' ? match.teamB : match.teamA;
 
+    // Calculate average skill of opponents for rating adjustment
+    const winningTeamSkill = (playerMap.get(winningTeam.player1Id)?.skill || 50) + (playerMap.get(winningTeam.player2Id)?.skill || 50);
+    const losingTeamSkill = (playerMap.get(losingTeam.player1Id)?.skill || 50) + (playerMap.get(losingTeam.player2Id)?.skill || 50);
+    const avgOpponentSkill = (winningTeamSkill + losingTeamSkill) / 2;
+
     const updatedPlayers = state.players.map(player => {
       const isWinner = winningTeam.player1Id === player.id || winningTeam.player2Id === player.id;
       const isLoser = losingTeam.player1Id === player.id || losingTeam.player2Id === player.id;
@@ -363,8 +368,24 @@ export default function TournamentBracket() {
           else points = 1; // Bad loss (0-4 or 1-4): +1 point
         }
 
+        // Calculate skill adjustment based on win/loss and opponent strength
+        let skillAdjustment = 0;
+        if (isWinner) {
+          // Winning against stronger opponents gives more skill points
+          const skillDiff = avgOpponentSkill - player.skill;
+          skillAdjustment = Math.max(1, Math.min(3, 1 + Math.floor(skillDiff / 20))); // 1-3 points
+        } else {
+          // Losing to weaker opponents loses fewer skill points
+          const skillDiff = player.skill - avgOpponentSkill;
+          skillAdjustment = Math.max(-3, Math.min(-1, -1 - Math.floor(skillDiff / 20))); // -1 to -3 points
+        }
+
+        // Apply skill bounds (0-100)
+        const newSkill = Math.max(0, Math.min(100, player.skill + skillAdjustment));
+
         return {
           ...player,
+          skill: newSkill,
           stats: {
             ...player.stats,
             matchesPlayed: player.stats.matchesPlayed + 1,

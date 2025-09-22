@@ -218,67 +218,92 @@ export function generateRandomBalancedMatches(players: Player[]): MatchPreview[]
 
   const matchCount = Math.floor(players.length / 4);
   const courts = getAvailableCourts(players.length);
-  
-  // Shuffle players randomly
-  const shuffledPlayers = [...players].sort(() => Math.random() - 0.5);
-  
+
   if (players.length === 4) {
-    // Simple pairing for 4 players
+    // Simple pairing for 4 players - just shuffle and pair
+    const shuffledPlayers = [...players].sort(() => Math.random() - 0.5);
     const teams = [
       createTeam(shuffledPlayers[0], shuffledPlayers[1]),
       createTeam(shuffledPlayers[2], shuffledPlayers[3]),
     ];
-    
+
     return [{ court: 'A', teamA: teams[0], teamB: teams[1] }];
   }
-  
-  // For more players, create all possible teams and select balanced ones
-  const allTeams: Team[] = [];
-  for (let i = 0; i < shuffledPlayers.length; i++) {
-    for (let j = i + 1; j < shuffledPlayers.length; j++) {
-      allTeams.push(createTeam(shuffledPlayers[i], shuffledPlayers[j]));
+
+  // For more players, try multiple random combinations and pick the most balanced
+  const attempts = 20; // Try 20 different random combinations
+  let bestMatches: MatchPreview[] = [];
+  let bestBalanceScore = -1;
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    // Shuffle players completely randomly
+    const shuffledPlayers = [...players].sort(() => Math.random() - 0.5);
+
+    // Create random team pairings by taking consecutive pairs
+    const teams: Team[] = [];
+    const usedPlayerIds = new Set<string>();
+
+    for (let i = 0; i < shuffledPlayers.length && teams.length < matchCount * 2; i += 2) {
+      if (i + 1 < shuffledPlayers.length) {
+        const player1 = shuffledPlayers[i];
+        const player2 = shuffledPlayers[i + 1];
+
+        // Make sure we haven't used these players already (shouldn't happen with proper shuffle)
+        if (!usedPlayerIds.has(player1.id) && !usedPlayerIds.has(player2.id)) {
+          teams.push(createTeam(player1, player2));
+          usedPlayerIds.add(player1.id);
+          usedPlayerIds.add(player2.id);
+        }
+      }
+    }
+
+    // If we don't have enough teams, skip this attempt
+    if (teams.length < matchCount * 2) continue;
+
+    // Create matches by pairing teams randomly
+    const availableTeams = [...teams];
+    const matches: MatchPreview[] = [];
+
+    for (let i = 0; i < matchCount; i++) {
+      // Pick two random teams that haven't been used yet
+      const teamAIndex = Math.floor(Math.random() * availableTeams.length);
+      const teamA = availableTeams.splice(teamAIndex, 1)[0];
+
+      const teamBIndex = Math.floor(Math.random() * availableTeams.length);
+      const teamB = availableTeams.splice(teamBIndex, 1)[0];
+
+      matches.push({ court: courts[i], teamA, teamB });
+    }
+
+    // Calculate balance score for this setup (lower is better)
+    const totalBalanceScore = matches.reduce((sum, match) => {
+      return sum + calculateBalanceScore(match.teamA, match.teamB);
+    }, 0);
+
+    // Keep this setup if it's more balanced than previous best
+    if (bestBalanceScore === -1 || totalBalanceScore < bestBalanceScore) {
+      bestBalanceScore = totalBalanceScore;
+      bestMatches = matches;
     }
   }
-  
-  // Sort teams by combined skill for better balance
-  allTeams.sort((a, b) => a.combinedSkill - b.combinedSkill);
-  
-  // Select required number of teams ensuring no player appears twice
-  const teamsNeeded = matchCount * 2;
-  const selectedTeams: Team[] = [];
-  const usedPlayerIds = new Set<string>();
-  
-  for (const team of allTeams) {
-    if (selectedTeams.length >= teamsNeeded) break;
-    
-    if (!usedPlayerIds.has(team.player1.id) && !usedPlayerIds.has(team.player2.id)) {
-      selectedTeams.push(team);
-      usedPlayerIds.add(team.player1.id);
-      usedPlayerIds.add(team.player2.id);
+
+  // If we couldn't generate any matches, fall back to simple pairing
+  if (bestMatches.length === 0) {
+    console.warn('Random balanced algorithm failed, falling back to simple pairing');
+    const shuffledPlayers = [...players].sort(() => Math.random() - 0.5);
+    const matches: MatchPreview[] = [];
+
+    for (let i = 0; i < matchCount; i++) {
+      const startIndex = i * 4;
+      const teamA = createTeam(shuffledPlayers[startIndex], shuffledPlayers[startIndex + 1]);
+      const teamB = createTeam(shuffledPlayers[startIndex + 2], shuffledPlayers[startIndex + 3]);
+      matches.push({ court: courts[i], teamA, teamB });
     }
+
+    return matches;
   }
-  
-  // If we don't have enough teams, fall back to simple pairing
-  if (selectedTeams.length < teamsNeeded) {
-    selectedTeams.length = 0;
-    usedPlayerIds.clear();
-    
-    for (let i = 0; i < shuffledPlayers.length; i += 2) {
-      selectedTeams.push(createTeam(shuffledPlayers[i], shuffledPlayers[i + 1]));
-    }
-  }
-  
-  // Create matches by pairing teams with similar skill levels
-  const sortedTeams = selectedTeams.sort((a, b) => a.combinedSkill - b.combinedSkill);
-  const matches: MatchPreview[] = [];
-  
-  for (let i = 0; i < matchCount; i++) {
-    const teamA = sortedTeams[i];
-    const teamB = sortedTeams[sortedTeams.length - 1 - i];
-    matches.push({ court: courts[i], teamA, teamB });
-  }
-  
-  return matches;
+
+  return bestMatches;
 }
 
 // Mixed tiers matchmaking algorithm
@@ -1133,11 +1158,6 @@ export function calculateRoundRobinStandings(
   tournament: Tournament,
   players: Player[]
 ): RoundRobinStanding[] {
-  // If standings are already calculated and stored, use them (prevents unnecessary recalculation)
-  if (tournament.roundRobinStandings && tournament.roundRobinStandings.length > 0) {
-    return tournament.roundRobinStandings;
-  }
-
   // For switch-doubles format, calculate individual player standings
   if (tournament.roundRobinFormat === 'switch-doubles') {
     return calculateSwitchDoublesStandings(tournament, players);

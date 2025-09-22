@@ -87,7 +87,7 @@ export default function MatchMaker() {
   ];
 
   // Generate matches with selected algorithm
-  const handleGenerateMatches = async (mode: MatchmakingMode) => {
+  const handleGenerateMatches = async (mode: MatchmakingMode, format?: 'regular-doubles' | 'switch-doubles') => {
     if (!canGenerate) {
       const remainder = availablePlayers.length % 4;
       const needed = remainder === 0 ? 0 : 4 - remainder;
@@ -130,14 +130,15 @@ export default function MatchMaker() {
         navigate('/tournament');
       } else if (mode === 'round-robin') {
         // Special handling for round-robin mode
-        const tournamentBracket = generateRoundRobinBracket(playersToUse, roundRobinFormat);
+        const selectedFormat = format || roundRobinFormat; // Use passed format or fall back to state
+        const tournamentBracket = generateRoundRobinBracket(playersToUse, selectedFormat);
 
         // Create round-robin tournament
         const tournament: Tournament = {
           id: generateId(),
           name: generateTournamentName(),
           type: 'round-robin',
-          roundRobinFormat: roundRobinFormat,
+          roundRobinFormat: selectedFormat,
           status: 'active',
           currentRound: 1,
           totalRounds: tournamentBracket.length,
@@ -152,7 +153,7 @@ export default function MatchMaker() {
         setCurrentTournament(tournament);
 
         const totalMatches = tournamentBracket.flat().length;
-        const formatName = roundRobinFormat === 'regular-doubles' ? 'Fixed Teams' : 'Rotating Partners';
+        const formatName = selectedFormat === 'regular-doubles' ? 'Fixed Teams' : 'Rotating Partners';
         toast.success(`🎯 Round-Robin Mode (${formatName}) created with ${totalMatches} matches across ${tournamentBracket.length} rounds!`);
 
         // Navigate to tournament view
@@ -682,8 +683,7 @@ export default function MatchMaker() {
                 {/* Fixed Teams Option */}
                 <div
                   onClick={() => {
-                    setRoundRobinFormat('regular-doubles');
-                    handleGenerateMatches('round-robin');
+                    handleGenerateMatches('round-robin', 'regular-doubles');
                   }}
                   className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-lg ${
                     roundRobinFormat === 'regular-doubles'
@@ -722,8 +722,7 @@ export default function MatchMaker() {
                 {/* Rotating Partners Option */}
                 <div
                   onClick={() => {
-                    setRoundRobinFormat('switch-doubles');
-                    handleGenerateMatches('round-robin');
+                    handleGenerateMatches('round-robin', 'switch-doubles');
                   }}
                   className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-lg ${
                     roundRobinFormat === 'switch-doubles'

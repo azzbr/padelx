@@ -379,7 +379,7 @@ function generateSampleData() {
   const samplePlayers: Player[] = [
     'Salmeen', 'Nawaf', 'Khalid', 'Janahi', 'Bu Faisal', 'Badran', 'Bucheeri', 'Al Mannai',
     'Ahmed', 'Omar', 'Faisal', 'Hamad', 'Saeed', 'Rashid', 'Yousef', 'Mansour',
-    'Abdulla', 'Mohammed', 'Ali', 'Hassan'
+    'Abdulla', 'Abdul Qader', 'Ali', 'Aziz'
   ].map((name, index) => ({
     id: `player-${index + 1}`,
     name,
