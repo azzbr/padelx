@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Tournament, TournamentMatch, Player, Match, Session, RoundRobinStanding } from '../types';
-import { Trophy, Play, CheckCircle, Clock, Users, Target, Plus, Minus, Copy, Share2 } from 'lucide-react';
+import { Trophy, Play, CheckCircle, Clock, Users, Target, Plus, Minus, Copy, Share2, Shuffle } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { generateId, updateTournamentWithResult, calculateRoundRobinStandings, updateRoundRobinTournamentWithResult } from '../utils/matchmaking';
+import { generateId, updateTournamentWithResult, calculateRoundRobinStandings, updateRoundRobinTournamentWithResult, generateRoundRobinBracket } from '../utils/matchmaking';
 
 // Use structuredClone for safe deep copying (widely supported in modern browsers)
 
@@ -145,47 +145,22 @@ export default function TournamentBracket() {
     currentTournament.bracket.forEach((round, roundIndex) => {
       scheduleText += `📅 Round ${roundIndex + 1}:\n`;
 
-      round.forEach(match => {
-        const courtName = match.court ? `Court ${match.court}` : 'TBD';
-        scheduleText += `  ${courtName}: ${match.teamA.name} vs ${match.teamB.name}\n`;
+      // Sort matches by court for consistent ordering (A, B, C, etc.)
+      const sortedMatches = [...round].sort((a, b) => {
+        const courtA = a.court || '';
+        const courtB = b.court || '';
+        return courtA.localeCompare(courtB);
+      });
 
-        if (match.status === 'completed' && match.score) {
-          const winner = match.winner === 'teamA' ? match.teamA.name : match.teamB.name;
-          scheduleText += `    ✅ ${match.score.teamA} - ${match.score.teamB} (${winner} wins)\n`;
-        } else if (match.status === 'in-progress' && match.score) {
-          scheduleText += `    🔄 ${match.score.teamA} - ${match.score.teamB} (In Progress)\n`;
-        } else {
-          scheduleText += `    ⏳ Not Started\n`;
-        }
+      sortedMatches.forEach(match => {
+        const courtLetter = match.court ? match.court.replace('Court ', '') : 'TBD';
+        scheduleText += `${courtLetter}: (${match.teamA.name}) vs (${match.teamB.name})\n`;
       });
 
       scheduleText += '\n';
     });
 
-    if (currentTournament.type === 'round-robin') {
-      const standings = calculateRoundRobinStandings(currentTournament, players);
-      if (standings.length > 0) {
-        if (currentTournament.roundRobinFormat === 'switch-doubles') {
-          scheduleText += `📊 Individual Player Standings:\n`;
-          scheduleText += `Rank | Player | P | W | L | T | Pts\n`;
-          scheduleText += `-----|--------|---|---|---|---|----\n`;
-
-          standings.forEach(standing => {
-            scheduleText += `${standing.rank.toString().padStart(4)} | ${standing.teamName.padEnd(12)} | ${standing.played} | ${standing.won} | ${standing.lost} | ${standing.tied} | ${standing.points}\n`;
-          });
-        } else {
-          scheduleText += `📊 Team Standings:\n`;
-          scheduleText += `Rank | Team | P | W | L | T | Pts\n`;
-          scheduleText += `-----|------|---|---|---|---|----\n`;
-
-          standings.forEach(standing => {
-            scheduleText += `${standing.rank.toString().padStart(4)} | ${standing.teamName.padEnd(12)} | ${standing.played} | ${standing.won} | ${standing.lost} | ${standing.tied} | ${standing.points}\n`;
-          });
-        }
-      }
-    }
-
-    scheduleText += `\n🎾 Powered by PadelX`;
+    scheduleText += `🎾 Powered by PadelX`;
     return scheduleText;
   };
 
@@ -461,6 +436,52 @@ export default function TournamentBracket() {
     }
   };
 
+  // Reshuffle tournament with new partner combinations
+  const handleReshuffleTournament = () => {
+    // Safety check: don't allow reshuffling if any matches have started
+    if (tournamentStats.completed > 0 || tournamentStats.inProgress > 0) {
+      toast.error('Cannot reshuffle tournament after matches have started!');
+      return;
+    }
+
+    try {
+      // Get the same players that were in the original tournament
+      const tournamentPlayerIds = new Set<string>();
+      currentTournament.bracket.forEach(round => {
+        round.forEach(match => {
+          tournamentPlayerIds.add(match.teamA.player1Id);
+          tournamentPlayerIds.add(match.teamA.player2Id);
+          tournamentPlayerIds.add(match.teamB.player1Id);
+          tournamentPlayerIds.add(match.teamB.player2Id);
+        });
+      });
+
+      const tournamentPlayers = players.filter(p => tournamentPlayerIds.has(p.id));
+
+      // Generate new bracket with same players but different pairings
+      const newBracket = generateRoundRobinBracket(
+        tournamentPlayers,
+        currentTournament.roundRobinFormat || 'regular-doubles'
+      );
+
+      // Update tournament with new bracket
+      const reshuffledTournament: Tournament = {
+        ...currentTournament,
+        bracket: newBracket,
+        currentRound: 1,
+        status: 'active',
+        roundRobinStandings: [], // Will be recalculated as matches are played
+      };
+
+      updateTournament(reshuffledTournament);
+      toast.success('Tournament reshuffled with new partner combinations! 🔄');
+
+    } catch (error) {
+      console.error('Error reshuffling tournament:', error);
+      toast.error('Failed to reshuffle tournament. Please try again.');
+    }
+  };
+
 
   const renderMatch = (match: TournamentMatch, roundIndex: number, matchIndex: number) => {
     const status = getMatchStatus(match);
@@ -663,6 +684,15 @@ export default function TournamentBracket() {
 
           {/* Actions */}
           <div className="flex gap-3">
+            <button
+              onClick={handleReshuffleTournament}
+              disabled={tournamentStats.completed > 0 || tournamentStats.inProgress > 0}
+              className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+              title={tournamentStats.completed > 0 || tournamentStats.inProgress > 0 ? "Cannot reshuffle after matches have started" : "Generate new partner combinations"}
+            >
+              <Shuffle className="w-4 h-4" />
+              <span>Reshuffle</span>
+            </button>
             <button
               onClick={copyTournamentSchedule}
               className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
