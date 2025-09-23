@@ -84,10 +84,24 @@ export default function MatchMaker() {
       color: 'bg-orange-500',
       recommended: false,
     },
+    {
+      id: 'social-play' as MatchmakingMode,
+      title: 'Social Play Mode',
+      description: 'Manually enter past match scores to update stats',
+      icon: Plus,
+      color: 'bg-yellow-500',
+      recommended: false,
+    },
   ];
 
   // Generate matches with selected algorithm
   const handleGenerateMatches = async (mode: MatchmakingMode, format?: 'regular-doubles' | 'switch-doubles') => {
+    // Special case for social play - no generation needed
+    if (mode === 'social-play') {
+      navigate('/register-play');
+      return;
+    }
+
     if (!canGenerate) {
       const remainder = availablePlayers.length % 4;
       const needed = remainder === 0 ? 0 : 4 - remainder;
@@ -639,9 +653,9 @@ export default function MatchMaker() {
                           handleGenerateMatches(algorithm.id);
                         }
                       }}
-                      disabled={!canGenerate || isGenerating}
+                      disabled={(algorithm.id !== 'social-play' && !canGenerate) || isGenerating}
                       className={`btn w-full ${
-                        canGenerate
+                        (algorithm.id === 'social-play' || canGenerate)
                           ? 'btn-primary'
                           : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                       }`}
@@ -650,6 +664,11 @@ export default function MatchMaker() {
                         <>
                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                           Generating...
+                        </>
+                      ) : algorithm.id === 'social-play' ? (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Manual Matches
                         </>
                       ) : (
                         <>
@@ -861,53 +880,16 @@ export default function MatchMaker() {
                     </div>
                   </div>
 
-                  {/* Enhanced Horizontal Team Layout */}
-                  <div className="flex items-center justify-between mb-4">
-                    {/* Team A */}
-                    <div className="flex-1 text-center">
-                      <div className="font-medium text-gray-900 dark:text-white mb-1">Team A</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                        ({match.teamA.player1.name} + {match.teamA.player2.name})
-                      </div>
-                      <div className={`font-bold text-xl px-3 py-1 rounded-lg ${
-                        balance.label === 'Perfectly Balanced'
-                          ? 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200'
-                          : balance.label === 'Good Match'
-                          ? 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200'
-                          : 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200'
-                      }`}>
-                        {teamASkill}
-                      </div>
+                  {/* Compact Horizontal Match Layout */}
+                  <div className="flex items-center justify-between w-full mb-4">
+                    <div className="text-sm font-medium text-right">
+                      {match.teamA.player1.name} + {match.teamA.player2.name}
                     </div>
 
-                    {/* Enhanced VS Divider */}
-                    <div className="mx-4">
-                      <div className={`px-4 py-2 rounded-full font-bold text-xl ${
-                        balance.label === 'Perfectly Balanced'
-                          ? 'bg-green-200 dark:bg-green-700 text-green-800 dark:text-green-200'
-                          : balance.label === 'Good Match'
-                          ? 'bg-yellow-200 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-200'
-                          : 'bg-red-200 dark:bg-red-700 text-red-800 dark:text-red-200'
-                      }`}>
-                        VS
-                      </div>
-                    </div>
+                    <span className="mx-4 font-bold text-gray-400">VS</span>
 
-                    {/* Team B */}
-                    <div className="flex-1 text-center">
-                      <div className="font-medium text-gray-900 dark:text-white mb-1">Team B</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                        ({match.teamB.player1.name} + {match.teamB.player2.name})
-                      </div>
-                      <div className={`font-bold text-xl px-3 py-1 rounded-lg ${
-                        balance.label === 'Perfectly Balanced'
-                          ? 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200'
-                          : balance.label === 'Good Match'
-                          ? 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200'
-                          : 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200'
-                      }`}>
-                        {teamBSkill}
-                      </div>
+                    <div className="text-sm font-medium text-left">
+                      {match.teamB.player1.name} + {match.teamB.player2.name}
                     </div>
                   </div>
 

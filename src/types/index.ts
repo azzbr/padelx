@@ -104,7 +104,7 @@ export interface AppSettings {
   darkMode: boolean;
 }
 
-export type MatchmakingMode = 'skill-based' | 'random-balanced' | 'mixed-tiers' | 'tournament' | 'round-robin';
+export type MatchmakingMode = 'skill-based' | 'random-balanced' | 'mixed-tiers' | 'tournament' | 'round-robin' | 'social-play';
 
 export interface Team {
   player1: Player;

@@ -14,7 +14,8 @@ import {
   Download,
   Upload,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Save
 } from 'lucide-react';
 import { rankPlayers, getTopPerformers, calculateWinRate } from '../utils/calculations';
 import { exportData, importData, clearAllData } from '../utils/storage';
@@ -55,6 +56,13 @@ export default function Dashboard() {
       action: () => navigate('/matchmaker'),
       color: 'bg-green-500',
       disabled: availableToday < 16,
+    },
+    {
+      title: 'Register Social Play',
+      description: 'Manually enter past match scores',
+      icon: Save,
+      action: () => navigate('/register-play'),
+      color: 'bg-yellow-500',
     },
     {
       title: 'View History',
