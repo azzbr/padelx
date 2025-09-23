@@ -11,6 +11,7 @@ import Leaderboard from './components/Leaderboard';
 import Settings from './components/Settings';
 import TournamentBracket from './components/TournamentBracket';
 import RegisterSocialPlay from './components/RegisterSocialPlay';
+import SessionSummary from './components/SessionSummary';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -26,6 +27,7 @@ function App() {
             <Route path="/players" element={<PlayerManager />} />
             <Route path="/matchmaker" element={<MatchMaker />} />
             <Route path="/register-play" element={<RegisterSocialPlay />} />
+            <Route path="/session-summary/:sessionId" element={<SessionSummary />} />
             <Route path="/tournament" element={<TournamentBracket />} />
             <Route path="/live" element={<LiveMatch />} />
             <Route path="/history" element={<MatchHistory />} />

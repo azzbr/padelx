@@ -166,7 +166,7 @@ export default function RegisterSocialPlay() {
     updatedPlayers.forEach(player => updatePlayer(player));
 
     toast.success('Social play session registered successfully!');
-    navigate('/dashboard');
+    navigate(`/session-summary/${sessionId}`);
   };
 
   const getPlayerName = (id: string) => state.players.find(p => p.id === id)?.name || 'Unknown';
@@ -458,7 +458,7 @@ export default function RegisterSocialPlay() {
             className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             <Save className="w-5 h-5 mr-2" />
-            Register Session
+            Finish & View Summary
           </button>
         </div>
       </div>
