@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Undo2, Play, Pause, Trophy, Clock, Copy, Edit3, Check, X, Minimize2, RotateCcw } from 'lucide-react';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Match, Player, GamePoint } from '../types';
@@ -8,22 +8,30 @@ import { toast } from 'react-toastify';
 
 const LiveMatch: React.FC = () => {
   const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const { state, dispatch } = useApp();
   const [activeMatches, setActiveMatches] = useState<Match[]>([]);
   const [matchTimers, setMatchTimers] = useState<{ [matchId: string]: number }>({});
   const [compactView, setCompactView] = useState(false);
   const [editingMatch, setEditingMatch] = useState<string | null>(null);
   const [editScores, setEditScores] = useState<{ teamA: number; teamB: number }>({ teamA: 0, teamB: 0 });
+  const [currentSession, setCurrentSession] = useState<any>(null);
 
   useEffect(() => {
-    // Get current session's matches
-    const currentSession = state.sessions.find(s => s.status === 'active');
-    if (!currentSession) {
-      navigate('/matchmaker');
+    if (!sessionId) {
+      navigate('/live');
       return;
     }
 
-    const matches = state.matches.filter(m => m.sessionId === currentSession.id);
+    // Get the specific session by ID
+    const session = state.sessions.find(s => s.id === sessionId);
+    if (!session) {
+      navigate('/live');
+      return;
+    }
+
+    setCurrentSession(session);
+    const matches = state.matches.filter(m => m.sessionId === sessionId);
     setActiveMatches(matches);
 
     // Initialize timers for live matches
@@ -37,7 +45,7 @@ const LiveMatch: React.FC = () => {
       }
     });
     setMatchTimers(timers);
-  }, [state.matches, state.sessions, navigate]);
+  }, [sessionId, state.matches, state.sessions, navigate]);
 
   useEffect(() => {
     // Update timers every second for live matches

@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import PlayerManager from './components/PlayerManager';
 import MatchMaker from './components/MatchMaker';
 import LiveMatch from './components/LiveMatch';
+import LiveDashboard from './components/LiveDashboard';
 import MatchHistory from './components/MatchHistory';
 import Leaderboard from './components/Leaderboard';
 import Settings from './components/Settings';
@@ -29,7 +30,9 @@ function App() {
             <Route path="/register-play" element={<RegisterSocialPlay />} />
             <Route path="/session-summary/:sessionId" element={<SessionSummary />} />
             <Route path="/tournament" element={<TournamentBracket />} />
-            <Route path="/live" element={<LiveMatch />} />
+            <Route path="/live" element={<LiveDashboard />} />
+            <Route path="/live/session/:sessionId" element={<LiveMatch />} />
+            <Route path="/live/tournament/:tournamentId" element={<TournamentBracket />} />
             <Route path="/history" element={<MatchHistory />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/settings" element={<Settings />} />

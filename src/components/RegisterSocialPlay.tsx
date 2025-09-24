@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Player, Match, Session } from '../types';
@@ -21,10 +21,103 @@ interface MatchEntry {
   winner: 'teamA' | 'teamB';
 }
 
+interface SessionLeaderboardProps {
+  matches: MatchEntry[];
+  selectedPlayers: string[];
+  players: Player[];
+}
+
+function SessionLeaderboard({ matches, selectedPlayers, players }: SessionLeaderboardProps) {
+  const sessionRankedPlayers = useMemo(() => {
+    // Calculate session stats for leaderboard
+    const sessionPlayers = selectedPlayers.map(playerId => {
+      const player = players.find(p => p.id === playerId);
+      if (!player) return null;
+
+      // Calculate session-specific stats
+      let sessionMatchesPlayed = 0;
+      let sessionMatchesWon = 0;
+      let sessionGamesWon = 0;
+      let sessionGamesLost = 0;
+      let sessionPoints = 0;
+
+      matches.forEach(match => {
+        const isInTeamA = match.teamA.player1Id === playerId || match.teamA.player2Id === playerId;
+        const isInTeamB = match.teamB.player1Id === playerId || match.teamB.player2Id === playerId;
+
+        if (isInTeamA || isInTeamB) {
+          sessionMatchesPlayed++;
+          const isWinner = (isInTeamA && match.winner === 'teamA') || (isInTeamB && match.winner === 'teamB');
+          if (isWinner) sessionMatchesWon++;
+
+          const gamesWon = isInTeamA ? match.scoreA : match.scoreB;
+          const gamesLost = isInTeamA ? match.scoreB : match.scoreA;
+          sessionGamesWon += gamesWon;
+          sessionGamesLost += gamesLost;
+
+          // Calculate points using the same logic as calculations.ts
+          const points = isWinner ? 10 : (gamesWon === 3 && gamesLost === 4) ? 2 : (gamesWon === 2 && gamesLost === 4) ? 1 : 0;
+          sessionPoints += points;
+        }
+      });
+
+      return {
+        ...player,
+        stats: {
+          ...player.stats,
+          matchesPlayed: sessionMatchesPlayed,
+          matchesWon: sessionMatchesWon,
+          matchesLost: sessionMatchesPlayed - sessionMatchesWon,
+          gamesWon: sessionGamesWon,
+          gamesLost: sessionGamesLost,
+          points: sessionPoints,
+        }
+      };
+    }).filter(Boolean) as Player[];
+
+    return rankPlayers(sessionPlayers);
+  }, [matches, selectedPlayers, players]);
+
+  return (
+    <div className="card p-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+        <Trophy className="w-5 h-5 mr-2" />
+        Session Leaderboard
+      </h2>
+      <div className="space-y-3">
+        {sessionRankedPlayers.slice(0, 10).map((player, index) => (
+          <div key={player.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div className="flex items-center">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mr-3 ${
+                index === 0 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                index === 1 ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200' :
+                index === 2 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
+                'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+              }`}>
+                {index + 1}
+              </div>
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">{player.name}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {player.stats.matchesWon}/{player.stats.matchesPlayed} matches • {player.stats.gamesWon}-{player.stats.gamesLost} games
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-bold text-gray-900 dark:text-white">{player.stats.points}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">points</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function RegisterSocialPlay() {
   const navigate = useNavigate();
-  const { state } = useApp();
-  const { addSession, addMatch, updatePlayer } = useAppActions();
+  const { state, dispatch } = useApp();
+  const { addSession, addMatch } = useAppActions();
 
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [gamesToWin, setGamesToWin] = useState<number>(state.settings.gamesToWin);
@@ -122,48 +215,60 @@ export default function RegisterSocialPlay() {
       tiers: { strong: [], weak: [] }, // Not used for social play
     };
 
-    // Update players
-    const updatedPlayers = [...state.players];
+    // Calculate all player updates using original player data
+    const playerUpdates = new Map<string, Player>();
+
+    // First, update stats for all matches using original player data
     matchObjects.forEach(match => {
-      // Update stats for team A
-      const teamAPlayer1 = updatedPlayers.find(p => p.id === match.teamA.player1Id);
-      const teamAPlayer2 = updatedPlayers.find(p => p.id === match.teamA.player2Id);
-      const teamBPlayer1 = updatedPlayers.find(p => p.id === match.teamB.player1Id);
-      const teamBPlayer2 = updatedPlayers.find(p => p.id === match.teamB.player2Id);
+      // Update stats for team A players
+      [match.teamA.player1Id, match.teamA.player2Id].forEach(playerId => {
+        const originalPlayer = state.players.find(p => p.id === playerId);
+        if (originalPlayer) {
+          const updatedPlayer = updatePlayerStats(
+            originalPlayer,
+            match.teamA.gamesWon,
+            match.teamB.gamesWon,
+            match.winner === 'teamA',
+            sessionDate
+          );
+          playerUpdates.set(playerId, updatedPlayer);
+        }
+      });
 
-      if (teamAPlayer1) {
-        const updated = updatePlayerStats(teamAPlayer1, match.teamA.gamesWon, match.teamB.gamesWon, match.winner === 'teamA', sessionDate);
-        const index = updatedPlayers.findIndex(p => p.id === teamAPlayer1.id);
-        updatedPlayers[index] = updated;
-      }
-      if (teamAPlayer2) {
-        const updated = updatePlayerStats(teamAPlayer2, match.teamA.gamesWon, match.teamB.gamesWon, match.winner === 'teamA', sessionDate);
-        const index = updatedPlayers.findIndex(p => p.id === teamAPlayer2.id);
-        updatedPlayers[index] = updated;
-      }
-      if (teamBPlayer1) {
-        const updated = updatePlayerStats(teamBPlayer1, match.teamB.gamesWon, match.teamA.gamesWon, match.winner === 'teamB', sessionDate);
-        const index = updatedPlayers.findIndex(p => p.id === teamBPlayer1.id);
-        updatedPlayers[index] = updated;
-      }
-      if (teamBPlayer2) {
-        const updated = updatePlayerStats(teamBPlayer2, match.teamB.gamesWon, match.teamA.gamesWon, match.winner === 'teamB', sessionDate);
-        const index = updatedPlayers.findIndex(p => p.id === teamBPlayer2.id);
-        updatedPlayers[index] = updated;
-      }
-
-      // Update skills
-      const skillUpdatedPlayers = updateAllPlayersSkillsAfterMatch(updatedPlayers, match);
-      skillUpdatedPlayers.forEach(player => {
-        const index = updatedPlayers.findIndex(p => p.id === player.id);
-        updatedPlayers[index] = player;
+      // Update stats for team B players
+      [match.teamB.player1Id, match.teamB.player2Id].forEach(playerId => {
+        const originalPlayer = state.players.find(p => p.id === playerId);
+        if (originalPlayer) {
+          const updatedPlayer = updatePlayerStats(
+            originalPlayer,
+            match.teamB.gamesWon,
+            match.teamA.gamesWon,
+            match.winner === 'teamB',
+            sessionDate
+          );
+          playerUpdates.set(playerId, updatedPlayer);
+        }
       });
     });
 
-    // Save everything
+    // Then, update skills for all matches using the stat-updated players
+    matchObjects.forEach(match => {
+      const currentPlayers = Array.from(playerUpdates.values());
+      const skillUpdatedPlayers = updateAllPlayersSkillsAfterMatch(currentPlayers, match);
+      skillUpdatedPlayers.forEach(player => {
+        playerUpdates.set(player.id, player);
+      });
+    });
+
+    // Create final players array
+    const finalPlayers = state.players.map(originalPlayer => {
+      return playerUpdates.get(originalPlayer.id) || originalPlayer;
+    });
+
+    // Save everything with single batch update
     addSession(session);
     matchObjects.forEach(match => addMatch(match));
-    updatedPlayers.forEach(player => updatePlayer(player));
+    dispatch({ type: 'SET_PLAYERS', payload: finalPlayers });
 
     toast.success('Social play session registered successfully!');
     navigate(`/session-summary/${sessionId}`);
@@ -365,90 +470,7 @@ export default function RegisterSocialPlay() {
         )}
 
         {/* Session Leaderboard */}
-        {matches.length > 0 && (() => {
-          // Calculate session stats for leaderboard
-          const sessionPlayers = selectedPlayers.map(playerId => {
-            const player = state.players.find(p => p.id === playerId);
-            if (!player) return null;
-
-            // Calculate session-specific stats
-            let sessionMatchesPlayed = 0;
-            let sessionMatchesWon = 0;
-            let sessionGamesWon = 0;
-            let sessionGamesLost = 0;
-            let sessionPoints = 0;
-
-            matches.forEach(match => {
-              const isInTeamA = match.teamA.player1Id === playerId || match.teamA.player2Id === playerId;
-              const isInTeamB = match.teamB.player1Id === playerId || match.teamB.player2Id === playerId;
-
-              if (isInTeamA || isInTeamB) {
-                sessionMatchesPlayed++;
-                const isWinner = (isInTeamA && match.winner === 'teamA') || (isInTeamB && match.winner === 'teamB');
-                if (isWinner) sessionMatchesWon++;
-
-                const gamesWon = isInTeamA ? match.scoreA : match.scoreB;
-                const gamesLost = isInTeamA ? match.scoreB : match.scoreA;
-                sessionGamesWon += gamesWon;
-                sessionGamesLost += gamesLost;
-
-                // Calculate points using the same logic as calculations.ts
-                const points = isWinner ? 10 : (gamesWon === 3 && gamesLost === 4) ? 2 : (gamesWon === 2 && gamesLost === 4) ? 1 : 0;
-                sessionPoints += points;
-              }
-            });
-
-            return {
-              ...player,
-              stats: {
-                ...player.stats,
-                matchesPlayed: sessionMatchesPlayed,
-                matchesWon: sessionMatchesWon,
-                matchesLost: sessionMatchesPlayed - sessionMatchesWon,
-                gamesWon: sessionGamesWon,
-                gamesLost: sessionGamesLost,
-                points: sessionPoints,
-              }
-            };
-          }).filter(Boolean) as Player[];
-
-          const sessionRankedPlayers = rankPlayers(sessionPlayers);
-
-          return (
-            <div className="card p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                <Trophy className="w-5 h-5 mr-2" />
-                Session Leaderboard
-              </h2>
-              <div className="space-y-3">
-                {sessionRankedPlayers.slice(0, 10).map((player, index) => (
-                  <div key={player.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    <div className="flex items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mr-3 ${
-                        index === 0 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                        index === 1 ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200' :
-                        index === 2 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
-                        'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                      }`}>
-                        {index + 1}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{player.name}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {player.stats.matchesWon}/{player.stats.matchesPlayed} matches • {player.stats.gamesWon}-{player.stats.gamesLost} games
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-gray-900 dark:text-white">{player.stats.points}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">points</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
+        {matches.length > 0 && <SessionLeaderboard matches={matches} selectedPlayers={selectedPlayers} players={state.players} />}
 
         {/* Submit */}
         <div className="flex justify-end">

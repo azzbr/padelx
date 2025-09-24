@@ -39,10 +39,18 @@ export default function TournamentBracket() {
 
   const playerMap = new Map(players.map(p => [p.id, p]));
 
-  // Memoize expensive calculations
+  // Use stored standings if available, otherwise calculate them
   const roundRobinStandings = useMemo(() => {
     if (currentTournament.type === 'round-robin') {
-      return calculateRoundRobinStandings(currentTournament, players);
+      // Use stored standings if available and tournament is not completed (to avoid recalculation)
+      // For completed tournaments, always use stored standings
+      if (currentTournament.status === 'completed' && currentTournament.roundRobinStandings) {
+        return currentTournament.roundRobinStandings;
+      }
+      // For active tournaments, prefer stored standings but fall back to calculation
+      return currentTournament.roundRobinStandings && currentTournament.roundRobinStandings.length > 0
+        ? currentTournament.roundRobinStandings
+        : calculateRoundRobinStandings(currentTournament, players);
     }
     return [];
   }, [currentTournament, players]);

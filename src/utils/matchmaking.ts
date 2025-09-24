@@ -122,7 +122,7 @@ function createTeam(player1: Player, player2: Player): Team {
 
 // Get available courts based on player count
 function getAvailableCourts(playerCount: number): string[] {
-  const courts = ['A', 'B', 'C', 'D'];
+  const courts = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
   const matchCount = Math.floor(playerCount / 4);
   return courts.slice(0, matchCount);
 }
@@ -1096,22 +1096,66 @@ function generateRoundRobinSchedule(
   return rounds;
 }
 
-// Generate switch-doubles round-robin schedule (rotating partners)
+// Generate switch-doubles round-robin schedule (rotating partners) for any even number of players
 function generateSwitchDoublesSchedule(players: Player[]): TournamentMatch[][] {
   const numPlayers = players.length;
 
-  // For switch-doubles, we need even number of players
-  if (numPlayers % 2 !== 0) {
-    throw new Error('Switch doubles requires even number of players');
+  if (numPlayers % 2 !== 0 || numPlayers < 4) {
+    throw new Error('Switch-doubles requires an even number of players (minimum 4)');
   }
 
-  // Currently only support 8 players with proven circle method
-  // TODO: Implement general circle method for other even player counts
-  if (numPlayers !== 8) {
-    throw new Error('Switch-doubles tournaments currently only support 8 players. Use regular-doubles for other player counts.');
+  const rounds: TournamentMatch[][] = [];
+  const playersCopy = [...players]; // Make a copy to avoid mutating the original array
+
+  const roundsNeeded = numPlayers - 1;
+  const playersToRotate = playersCopy.slice(1);
+  const fixedPlayer = playersCopy[0];
+
+  for (let round = 0; round < roundsNeeded; round++) {
+    const roundMatches: TournamentMatch[] = [];
+    const pairings: Player[][] = [];
+
+    // Pair the fixed player
+    pairings.push([fixedPlayer, playersToRotate[playersToRotate.length - 1]]);
+
+    // Pair the rest of the players
+    for (let i = 0; i < (numPlayers / 2) - 1; i++) {
+      pairings.push([playersToRotate[i], playersToRotate[playersToRotate.length - 2 - i]]);
+    }
+
+    // Create matches from pairings
+    for (let i = 0; i < pairings.length; i += 2) {
+        if (i + 1 < pairings.length) {
+            const teamAplayers = pairings[i];
+            const teamBplayers = pairings[i+1];
+            roundMatches.push({
+                id: generateId(),
+                round: round + 1,
+                matchNumber: (i/2) + 1,
+                court: `Court ${String.fromCharCode(65 + (i/2))}`,
+                teamA: {
+                    player1Id: teamAplayers[0].id,
+                    player2Id: teamAplayers[1].id,
+                    name: `${teamAplayers[0].name} + ${teamAplayers[1].name}`
+                },
+                teamB: {
+                    player1Id: teamBplayers[0].id,
+                    player2Id: teamBplayers[1].id,
+                    name: `${teamBplayers[0].name} + ${teamBplayers[1].name}`
+                },
+                status: 'pending'
+            });
+        }
+    }
+
+
+    rounds.push(roundMatches);
+
+    // Rotate players for the next round
+    playersToRotate.unshift(playersToRotate.pop()!);
   }
 
-  return generateSwitchDoublesSchedule8Players(players);
+  return rounds;
 }
 
 // Special implementation for 8 players using the proven circle method

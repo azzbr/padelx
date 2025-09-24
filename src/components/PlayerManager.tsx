@@ -326,6 +326,10 @@ export default function PlayerManager() {
   const availableToday = state.players.filter(p => p.availability.includes(today)).length;
   const availableTomorrow = state.players.filter(p => p.availability.includes(tomorrow)).length;
 
+  // Check if all players are available for smart button logic
+  const allAvailableToday = state.players.length > 0 && state.players.every(p => p.availability.includes(today));
+  const allAvailableTomorrow = state.players.length > 0 && state.players.every(p => p.availability.includes(tomorrow));
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
@@ -523,46 +527,7 @@ export default function PlayerManager() {
         </div>
       )}
 
-      {/* Availability Actions */}
-      <div className="card p-6 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Bulk Availability Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Today ({availableToday}/16)</h4>
-            <div className="flex gap-2">
-              <button
-                onClick={() => markAllAvailable(today)}
-                className="btn btn-success text-sm"
-              >
-                Mark All Available
-              </button>
-              <button
-                onClick={() => clearAllAvailability(today)}
-                className="btn btn-secondary text-sm"
-              >
-                Clear All
-              </button>
-            </div>
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Tomorrow ({availableTomorrow}/16)</h4>
-            <div className="flex gap-2">
-              <button
-                onClick={() => markAllAvailable(tomorrow)}
-                className="btn btn-success text-sm"
-              >
-                Mark All Available
-              </button>
-              <button
-                onClick={() => clearAllAvailability(tomorrow)}
-                className="btn btn-secondary text-sm"
-              >
-                Clear All
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* Add/Edit Player Form */}
       {showAddForm && (
@@ -710,9 +675,57 @@ export default function PlayerManager() {
 
       {/* Players List */}
       <div className="card p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Players ({state.players.length})
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Players ({state.players.length})
+          </h3>
+
+          {state.players.length > 0 && (
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                  Today ({availableToday}/{state.players.length})
+                </h4>
+                {allAvailableToday ? (
+                  <button
+                    onClick={() => clearAllAvailability(today)}
+                    className="btn btn-danger text-sm"
+                  >
+                    Unmark All Available
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => markAllAvailable(today)}
+                    className="btn btn-success text-sm"
+                  >
+                    Mark All Available
+                  </button>
+                )}
+              </div>
+
+              <div className="text-right">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                  Tomorrow ({availableTomorrow}/{state.players.length})
+                </h4>
+                {allAvailableTomorrow ? (
+                  <button
+                    onClick={() => clearAllAvailability(tomorrow)}
+                    className="btn btn-danger text-sm"
+                  >
+                    Unmark All Available
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => markAllAvailable(tomorrow)}
+                    className="btn btn-success text-sm"
+                  >
+                    Mark All Available
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {state.players.length === 0 ? (
           <div className="text-center py-8">
