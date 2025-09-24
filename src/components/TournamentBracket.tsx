@@ -201,6 +201,12 @@ export default function TournamentBracket() {
   };
 
   const handleStartMatch = (match: TournamentMatch) => {
+    // Prevent starting matches in completed tournaments
+    if (currentTournament.status === 'completed') {
+      toast.info('This tournament is completed and cannot be modified.');
+      return;
+    }
+
     // Find the match in the tournament bracket
     const roundIndex = currentTournament.bracket.findIndex(round =>
       round.some(m => m.id === match.id)
@@ -230,6 +236,12 @@ export default function TournamentBracket() {
   };
 
   const handleScorePoint = (match: TournamentMatch, team: 'teamA' | 'teamB') => {
+    // Prevent scoring in completed tournaments
+    if (currentTournament.status === 'completed') {
+      toast.info('This tournament is completed and cannot be modified.');
+      return;
+    }
+
     // Find the match in the tournament bracket
     const roundIndex = currentTournament.bracket.findIndex(round =>
       round.some(m => m.id === match.id)
@@ -692,15 +704,17 @@ export default function TournamentBracket() {
 
           {/* Actions */}
           <div className="flex gap-3">
-            <button
-              onClick={handleReshuffleTournament}
-              disabled={tournamentStats.completed > 0 || tournamentStats.inProgress > 0}
-              className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
-              title={tournamentStats.completed > 0 || tournamentStats.inProgress > 0 ? "Cannot reshuffle after matches have started" : "Generate new partner combinations"}
-            >
-              <Shuffle className="w-4 h-4" />
-              <span>Reshuffle</span>
-            </button>
+            {currentTournament.status !== 'completed' && (
+              <button
+                onClick={handleReshuffleTournament}
+                disabled={tournamentStats.completed > 0 || tournamentStats.inProgress > 0}
+                className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+                title={tournamentStats.completed > 0 || tournamentStats.inProgress > 0 ? "Cannot reshuffle after matches have started" : "Generate new partner combinations"}
+              >
+                <Shuffle className="w-4 h-4" />
+                <span>Reshuffle</span>
+              </button>
+            )}
             <button
               onClick={copyTournamentSchedule}
               className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"

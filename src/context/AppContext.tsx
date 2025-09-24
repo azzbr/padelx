@@ -43,10 +43,12 @@ type AppAction =
   | { type: 'SET_MATCHES'; payload: Match[] }
   | { type: 'ADD_SESSION'; payload: Session }
   | { type: 'UPDATE_SESSION'; payload: Session }
+  | { type: 'DELETE_SESSION'; payload: string }
   | { type: 'SET_SESSIONS'; payload: Session[] }
   | { type: 'SET_CURRENT_SESSION'; payload: Session | null }
   | { type: 'ADD_TOURNAMENT'; payload: Tournament }
   | { type: 'UPDATE_TOURNAMENT'; payload: Tournament }
+  | { type: 'DELETE_TOURNAMENT'; payload: string }
   | { type: 'SET_TOURNAMENTS'; payload: Tournament[] }
   | { type: 'SET_CURRENT_TOURNAMENT'; payload: Tournament | null }
   | { type: 'UPDATE_SETTINGS'; payload: AppSettings }
@@ -128,6 +130,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       );
       return { ...state, sessions: updatedSessions };
 
+    case 'DELETE_SESSION':
+      const filteredSessions = state.sessions.filter(s => s.id !== action.payload);
+      return { ...state, sessions: filteredSessions };
+
     case 'SET_SESSIONS':
       return { ...state, sessions: action.payload };
     
@@ -151,6 +157,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
         tournaments: updatedTournaments,
         currentTournament: updatedCurrentTournament
       };
+
+    case 'DELETE_TOURNAMENT':
+      const filteredTournaments = state.tournaments.filter(t => t.id !== action.payload);
+      return { ...state, tournaments: filteredTournaments };
 
     case 'SET_TOURNAMENTS':
       return { ...state, tournaments: action.payload };
@@ -365,9 +375,11 @@ export function useAppActions() {
     updateMatch: (match: Match) => dispatch({ type: 'UPDATE_MATCH', payload: match }),
     addSession: (session: Session) => dispatch({ type: 'ADD_SESSION', payload: session }),
     updateSession: (session: Session) => dispatch({ type: 'UPDATE_SESSION', payload: session }),
+    deleteSession: (sessionId: string) => dispatch({ type: 'DELETE_SESSION', payload: sessionId }),
     setCurrentSession: (session: Session | null) => dispatch({ type: 'SET_CURRENT_SESSION', payload: session }),
     addTournament: (tournament: Tournament) => dispatch({ type: 'ADD_TOURNAMENT', payload: tournament }),
     updateTournament: (tournament: Tournament) => dispatch({ type: 'UPDATE_TOURNAMENT', payload: tournament }),
+    deleteTournament: (tournamentId: string) => dispatch({ type: 'DELETE_TOURNAMENT', payload: tournamentId }),
     setCurrentTournament: (tournament: Tournament | null) => dispatch({ type: 'SET_CURRENT_TOURNAMENT', payload: tournament }),
     updateSettings: (settings: AppSettings) => dispatch({ type: 'UPDATE_SETTINGS', payload: settings }),
     loadSampleData: () => dispatch({ type: 'LOAD_SAMPLE_DATA' }),

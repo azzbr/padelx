@@ -10,14 +10,157 @@ import {
   Calendar,
   BarChart3,
   Plus,
-  ArrowRight
+  ArrowRight,
+  Trash2,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, useAppActions } from '../context/AppContext';
 import { Match } from '../types';
+import { toast } from 'react-toastify';
 
 const LiveDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
+  const { deleteSession, deleteTournament, updateSession, updateTournament } = useAppActions();
+
+  // Delete handlers
+  const handleDeleteSession = (sessionId: string, sessionName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${sessionName}"?\n\nThis will permanently remove the session and all its matches. This action cannot be undone.`)) {
+      deleteSession(sessionId);
+      toast.success(`Session "${sessionName}" deleted successfully`);
+    }
+  };
+
+  const handleDeleteTournament = (tournamentId: string, tournamentName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${tournamentName}"?\n\nThis will permanently remove the tournament and all its matches. This action cannot be undone.`)) {
+      deleteTournament(tournamentId);
+      toast.success(`Tournament "${tournamentName}" deleted successfully`);
+    }
+  };
+
+  // Finish handlers
+  const handleFinishSession = (sessionId: string, sessionName: string) => {
+    if (window.confirm(`Are you sure you want to finish "${sessionName}"?\n\nThis will complete all remaining matches and update player statistics.`)) {
+      // Find the session
+      const session = state.sessions.find(s => s.id === sessionId);
+      if (!session) return;
+
+      // Get all matches for this session
+      const sessionMatches = state.matches.filter(m => m.sessionId === sessionId);
+
+      // Complete all unfinished matches
+      const updatedMatches = sessionMatches.map(match => {
+        if (match.status === 'completed') return match;
+
+        // Determine winner for incomplete match
+        const teamAScore = match.teamA.gamesWon;
+        const teamBScore = match.teamB.gamesWon;
+
+        let winner: 'teamA' | 'teamB' | undefined;
+        if (teamAScore > teamBScore) {
+          winner = 'teamA';
+        } else if (teamBScore > teamAScore) {
+          winner = 'teamB';
+        }
+        // If tied, winner remains undefined (no points awarded)
+
+        return {
+          ...match,
+          status: 'completed' as const,
+          winner,
+          endTime: new Date().toISOString()
+        };
+      });
+
+      // Update matches in state
+      const allMatches = state.matches.map(match => {
+        const updated = updatedMatches.find(m => m.id === match.id);
+        return updated || match;
+      });
+
+      // Update player stats for matches with winners
+      const matchesWithWinners = updatedMatches.filter(m => m.winner);
+      if (matchesWithWinners.length > 0) {
+        const updatedPlayers = state.players.map(player => {
+          let statsUpdated = false;
+
+          matchesWithWinners.forEach(match => {
+            const winningTeam = match.winner === 'teamA' ? match.teamA : match.teamB;
+            const losingTeam = match.winner === 'teamA' ? match.teamB : match.teamA;
+
+            const isWinner = winningTeam.player1Id === player.id || winningTeam.player2Id === player.id;
+            const isLoser = losingTeam.player1Id === player.id || losingTeam.player2Id === player.id;
+
+            if (isWinner || isLoser) {
+              const gamesWon = isWinner ? winningTeam.gamesWon : losingTeam.gamesWon;
+              const gamesLost = isWinner ? losingTeam.gamesWon : winningTeam.gamesWon;
+
+              // Calculate points based on performance
+              let points = 0;
+              if (isWinner) {
+                points = 10; // Win: +10 points
+              } else {
+                // Loss points based on closeness
+                if (gamesWon === 3) points = 2; // Close loss (3-4): +2 points
+                else if (gamesWon === 2) points = 1; // Regular loss (2-4): +1 point
+                else points = 0; // Bad loss (0-4 or 1-4): 0 points
+              }
+
+              player = {
+                ...player,
+                stats: {
+                  ...player.stats,
+                  matchesPlayed: player.stats.matchesPlayed + 1,
+                  matchesWon: isWinner ? player.stats.matchesWon + 1 : player.stats.matchesWon,
+                  matchesLost: isLoser ? player.stats.matchesLost + 1 : player.stats.matchesLost,
+                  gamesWon: player.stats.gamesWon + gamesWon,
+                  gamesLost: player.stats.gamesLost + gamesLost,
+                  points: player.stats.points + points,
+                  lastPlayed: new Date().toISOString(),
+                  currentStreak: isWinner ?
+                    (player.stats.currentStreak >= 0 ? player.stats.currentStreak + 1 : 1) :
+                    (player.stats.currentStreak <= 0 ? player.stats.currentStreak - 1 : -1)
+                }
+              };
+              statsUpdated = true;
+            }
+          });
+
+          return statsUpdated ? player : player;
+        });
+
+        // Update state
+        dispatch({ type: 'SET_PLAYERS', payload: updatedPlayers });
+      }
+
+      dispatch({ type: 'SET_MATCHES', payload: allMatches });
+
+      // Mark session as completed
+      const updatedSession = { ...session, status: 'completed' as const };
+      updateSession(updatedSession);
+
+      const completedCount = updatedMatches.filter(m => m.status === 'completed').length;
+      const winnerCount = updatedMatches.filter(m => m.winner).length;
+      const tiedCount = updatedMatches.filter(m => !m.winner).length;
+
+      toast.success(`Session "${sessionName}" finished! ${completedCount} matches completed, ${winnerCount} with winners, ${tiedCount} tied.`);
+    }
+  };
+
+  const handleFinishTournament = (tournamentId: string, tournamentName: string) => {
+    if (window.confirm(`Are you sure you want to finish "${tournamentName}"?\n\nThis will complete all remaining matches and finalize the tournament standings.`)) {
+      // Find the tournament
+      const tournament = state.tournaments.find(t => t.id === tournamentId);
+      if (!tournament) return;
+
+      // For tournaments, we just mark them as completed since the bracket logic handles the rest
+      const updatedTournament = { ...tournament, status: 'completed' as const };
+      updateTournament(updatedTournament);
+
+      toast.success(`Tournament "${tournamentName}" finished successfully!`);
+    }
+  };
 
   // Get all active sessions and tournaments
   const activeItems = useMemo(() => {
@@ -329,11 +472,47 @@ const LiveDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Action Hint */}
+                {/* Action Buttons */}
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <p className="text-sm text-indigo-600 dark:text-indigo-400 font-medium">
-                    Click to score matches →
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-indigo-600 dark:text-indigo-400 font-medium">
+                      Click to score matches →
+                    </p>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (item.type === 'session') {
+                            handleFinishSession(item.id, item.name);
+                          } else {
+                            handleFinishTournament(item.id, item.name);
+                          }
+                        }}
+                        className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors"
+                        title="Finish this session/tournament"
+                      >
+                        <CheckCircle className="w-3 h-3" />
+                        <span>Finish</span>
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (item.type === 'session') {
+                            handleDeleteSession(item.id, item.name);
+                          } else {
+                            handleDeleteTournament(item.id, item.name);
+                          }
+                        }}
+                        className="flex items-center space-x-1 px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition-colors"
+                        title="Delete this session/tournament"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             );

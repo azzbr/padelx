@@ -12,7 +12,8 @@ import {
   Trophy,
   Users,
   Filter,
-  RefreshCw
+  RefreshCw,
+  ArrowRight
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Session, Match, Player } from '../types';
@@ -25,6 +26,22 @@ interface SessionWithMatches extends Session {
   averageScore?: string;
 }
 
+interface TournamentWithDetails {
+  id: string;
+  name: string;
+  type: 'single-elimination' | 'round-robin';
+  roundRobinFormat?: 'regular-doubles' | 'switch-doubles';
+  currentRound: number;
+  totalRounds: number;
+  players: string[];
+  bracket: any[];
+  createdAt: string;
+  status: 'completed';
+  totalMatches: number;
+  completedMatches: number;
+  winners: string[];
+}
+
 const MatchHistory: React.FC = () => {
   const navigate = useNavigate();
   const { state } = useApp();
@@ -32,6 +49,67 @@ const MatchHistory: React.FC = () => {
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const [dateFilter, setDateFilter] = useState<'all' | '7days' | '30days'>('all');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Process completed tournaments
+  const completedTournaments = useMemo(() => {
+    const tournaments = state.tournaments
+      .filter(tournament => tournament.status === 'completed')
+      .map(tournament => {
+        const totalMatches = tournament.bracket.flat().length;
+        const completedMatches = tournament.bracket.flat().filter((match: any) => match?.status === 'completed').length;
+
+        // Get winners (this is simplified - in a real implementation you'd track tournament winners)
+        const winners: string[] = [];
+        if (tournament.type === 'single-elimination' && tournament.bracket.length > 0) {
+          // For single elimination, the winner is in the final match
+          const finalRound = tournament.bracket[tournament.bracket.length - 1];
+          if (finalRound && finalRound.length > 0) {
+            const finalMatch = finalRound[0];
+            if (finalMatch?.winner) {
+              if (finalMatch.winner === 'teamA') {
+                winners.push(finalMatch.teamA.player1Id, finalMatch.teamA.player2Id);
+              } else {
+                winners.push(finalMatch.teamB.player1Id, finalMatch.teamB.player2Id);
+              }
+            }
+          }
+        }
+
+        return {
+          ...tournament,
+          totalMatches,
+          completedMatches,
+          winners,
+        } as TournamentWithDetails;
+      })
+      .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime());
+
+    // Apply date filter
+    const now = new Date();
+    const filteredTournaments = tournaments.filter(tournament => {
+      const tournamentDate = new Date(tournament.createdAt || '');
+      switch (dateFilter) {
+        case '7days':
+          return (now.getTime() - tournamentDate.getTime()) <= (7 * 24 * 60 * 60 * 1000);
+        case '30days':
+          return (now.getTime() - tournamentDate.getTime()) <= (30 * 24 * 60 * 60 * 1000);
+        default:
+          return true;
+      }
+    });
+
+    // Apply search filter (search by player names)
+    if (searchTerm.trim()) {
+      return filteredTournaments.filter(tournament => {
+        return tournament.players.some(playerId => {
+          const player = state.players.find(p => p.id === playerId);
+          return player?.name.toLowerCase().includes(searchTerm.toLowerCase());
+        });
+      });
+    }
+
+    return filteredTournaments;
+  }, [state.tournaments, state.players, searchTerm, dateFilter]);
 
   // Process sessions with their matches
   const sessionsWithMatches = useMemo(() => {
@@ -262,7 +340,7 @@ const MatchHistory: React.FC = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Match History</h1>
               <p className="text-gray-600 dark:text-gray-400">
-                {sessionsWithMatches.length} session{sessionsWithMatches.length !== 1 ? 's' : ''} found
+                {sessionsWithMatches.length} session{sessionsWithMatches.length !== 1 ? 's' : ''} and {completedTournaments.length} tournament{completedTournaments.length !== 1 ? 's' : ''} found
               </p>
             </div>
           </div>
@@ -310,143 +388,222 @@ const MatchHistory: React.FC = () => {
           </div>
         </div>
 
-        {/* Sessions List */}
-        <div className="space-y-4">
-          {sessionsWithMatches.length === 0 ? (
-            <div className="text-center py-8">
-              <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-gray-400">
-                No matches found for "{searchTerm}"
-              </p>
-              <button
-                onClick={() => setSearchTerm('')}
-                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 mt-2"
-              >
-                Clear search
-              </button>
-            </div>
-          ) : (
-            sessionsWithMatches.map((session) => {
-              const isExpanded = expandedSessions.has(session.id);
-              const sessionDate = new Date(session.date).toLocaleDateString();
+        {/* Sessions Section */}
+        {sessionsWithMatches.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+              <Calendar className="w-6 h-6 mr-2 text-indigo-600 dark:text-indigo-400" />
+              Sessions ({sessionsWithMatches.length})
+            </h2>
+            <div className="space-y-4">
+              {sessionsWithMatches.map((session) => {
+                const isExpanded = expandedSessions.has(session.id);
+                const sessionDate = new Date(session.date).toLocaleDateString();
 
-              return (
-                <div
-                  key={session.id}
-                  className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden"
-                >
-                  {/* Session Header */}
+                return (
                   <div
-                    className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    onClick={() => toggleSessionExpansion(session.id)}
+                    key={session.id}
+                    className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                          {isExpanded ? (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
-                          )}
-                          <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                            {sessionDate}
-                          </h3>
-                          <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-                            <span className="flex items-center space-x-1">
-                              <Trophy className="w-4 h-4" />
-                              <span>Total Matches: {session.sessionMatches.length}</span>
-                            </span>
-                            {session.averageScore && (
-                              <span>Average Score: {session.averageScore}</span>
+                    {/* Session Header */}
+                    <div
+                      className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      onClick={() => toggleSessionExpansion(session.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-2">
+                            {isExpanded ? (
+                              <ChevronDown className="w-5 h-5 text-gray-400" />
+                            ) : (
+                              <ChevronRight className="w-5 h-5 text-gray-400" />
                             )}
-                            {session.duration && (
+                            <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                              {sessionDate}
+                            </h3>
+                            <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
                               <span className="flex items-center space-x-1">
-                                <Clock className="w-4 h-4" />
-                                <span>Duration: {session.duration}</span>
+                                <Trophy className="w-4 h-4" />
+                                <span>Total Matches: {session.sessionMatches.length}</span>
                               </span>
-                            )}
+                              {session.averageScore && (
+                                <span>Average Score: {session.averageScore}</span>
+                              )}
+                              {session.duration && (
+                                <span className="flex items-center space-x-1">
+                                  <Clock className="w-4 h-4" />
+                                  <span>Duration: {session.duration}</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(session);
-                          }}
-                          className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                          title="Copy to clipboard"
-                        >
-                          <Copy className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            downloadSession(session);
-                          }}
-                          className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                          title="Download as text file"
-                        >
-                          <Download className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copyToClipboard(session);
+                            }}
+                            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                            title="Copy to clipboard"
+                          >
+                            <Copy className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadSession(session);
+                            }}
+                            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                            title="Download as text file"
+                          >
+                            <Download className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded Session Details */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-700">
+                        <div className="space-y-3">
+                          {session.sessionMatches.map((match, index) => (
+                            <div
+                              key={`${match.id}-${index}`}
+                              className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg"
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900 dark:text-white">
+                                  {highlightSearchTerm(formatMatchResult(match), searchTerm)}
+                                </p>
+                                <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                  {match.startTime && match.endTime && (
+                                    <span className="flex items-center space-x-1">
+                                      <Clock className="w-4 h-4" />
+                                      <span>
+                                        Duration: {Math.round(
+                                          (new Date(match.endTime).getTime() - new Date(match.startTime).getTime()) / (1000 * 60)
+                                        )}m
+                                      </span>
+                                    </span>
+                                  )}
+                                  <span>
+                                    Final Score: {match.teamA.gamesWon}-{match.teamB.gamesWon}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                  !match.winner
+                                    ? 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                    : match.winner === 'teamA'
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                }`}>
+                                  {!match.winner ? 'TIE' : match.winner === 'teamA' ? 'Team A Won' : 'Team B Won'}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tournaments Section */}
+        {completedTournaments.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+              <Trophy className="w-6 h-6 mr-2 text-yellow-600 dark:text-yellow-400" />
+              Tournaments ({completedTournaments.length})
+            </h2>
+            <div className="space-y-4">
+              {completedTournaments.map((tournament) => {
+                const tournamentDate = new Date(tournament.createdAt || '').toLocaleDateString();
+                const winnerNames = tournament.winners
+                  .map(playerId => getPlayerName(playerId))
+                  .filter(name => name !== 'Unknown Player')
+                  .join(', ');
+
+                return (
+                  <div
+                    key={tournament.id}
+                    className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border-2 border-yellow-200 dark:border-yellow-900/50"
+                  >
+                    {/* Tournament Header */}
+                    <div
+                      className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      onClick={() => navigate(`/live/tournament/${tournament.id}`)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <Trophy className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                              {tournament.name}
+                            </h3>
+                            <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                              <span>{tournamentDate}</span>
+                              <span className="flex items-center space-x-1">
+                                <Users className="w-4 h-4" />
+                                <span>{tournament.players.length} players</span>
+                              </span>
+                              <span className="flex items-center space-x-1">
+                                <Trophy className="w-4 h-4" />
+                                <span>{tournament.completedMatches}/{tournament.totalMatches} matches</span>
+                              </span>
+                              {winnerNames && (
+                                <span className="text-yellow-600 dark:text-yellow-400 font-medium">
+                                  🏆 {winnerNames}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-500 dark:text-gray-500 mt-1 capitalize">
+                              {tournament.type.replace('-', ' ')}
+                              {tournament.roundRobinFormat && ` • ${tournament.roundRobinFormat.replace('-', ' ')}`}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <span className="px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs font-medium rounded-full">
+                            COMPLETED
+                          </span>
+                          <ArrowRight className="w-5 h-5 text-gray-400" />
+                        </div>
                       </div>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                  {/* Expanded Session Details */}
-                  {isExpanded && (
-                    <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-700">
-                      <div className="space-y-3">
-                        {session.sessionMatches.map((match, index) => (
-                          <div
-                            key={`${match.id}-${index}`}
-                            className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg"
-                          >
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                {highlightSearchTerm(formatMatchResult(match), searchTerm)}
-                              </p>
-                              <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                {match.startTime && match.endTime && (
-                                  <span className="flex items-center space-x-1">
-                                    <Clock className="w-4 h-4" />
-                                    <span>
-                                      Duration: {Math.round(
-                                        (new Date(match.endTime).getTime() - new Date(match.startTime).getTime()) / (1000 * 60)
-                                      )}m
-                                    </span>
-                                  </span>
-                                )}
-                                <span>
-                                  Final Score: {match.teamA.gamesWon}-{match.teamB.gamesWon}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="ml-4">
-                              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                !match.winner
-                                  ? 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                                  : match.winner === 'teamA'
-                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                              }`}>
-                                {!match.winner ? 'TIE' : match.winner === 'teamA' ? 'Team A Won' : 'Team B Won'}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
+        {/* No Results */}
+        {sessionsWithMatches.length === 0 && completedTournaments.length === 0 && (
+          <div className="text-center py-8">
+            <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">
+              No matches found for "{searchTerm}"
+            </p>
+            <button
+              onClick={() => setSearchTerm('')}
+              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 mt-2"
+            >
+              Clear search
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
