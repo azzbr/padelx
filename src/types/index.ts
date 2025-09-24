@@ -162,3 +162,14 @@ export interface RoundRobinMatch {
     teamB: number;
   };
 }
+
+export interface SessionPlayer extends Player {
+  sessionStats: {
+    matchesPlayed: number;
+    matchesWon: number;
+    matchesLost: number;
+    gamesWon: number;
+    gamesLost: number;
+    points: number;
+  };
+}

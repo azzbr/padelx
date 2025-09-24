@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { rankPlayers } from '../utils/calculations';
+import { SessionPlayer } from '../types';
 import { Trophy, Share2, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -33,7 +34,7 @@ export default function SessionSummary() {
   const sessionMatches = state.matches.filter(m => session.matches.includes(m.id));
 
   // Calculate session stats for each player
-  const sessionPlayers = session.availablePlayers.map(playerId => {
+  const sessionPlayers: SessionPlayer[] = session.availablePlayers.map(playerId => {
     const player = state.players.find(p => p.id === playerId);
     if (!player) return null;
 
@@ -74,13 +75,17 @@ export default function SessionSummary() {
         gamesLost: sessionGamesLost,
         points: sessionPoints,
       }
-    };
-  }).filter(Boolean) as any[];
+    } as SessionPlayer;
+  }).filter(Boolean) as SessionPlayer[];
 
-  const sessionRankedPlayers = rankPlayers(sessionPlayers.map(p => ({
+  const sessionRankedPlayers: SessionPlayer[] = rankPlayers(sessionPlayers.map(p => ({
     ...p,
-    stats: (p as any).sessionStats
-  })));
+    stats: {
+      ...p.sessionStats,
+      currentStreak: 0, // Not calculated for session
+      lastPlayed: undefined
+    }
+  }))) as SessionPlayer[];
 
   // Format date for display
   const sessionDate = new Date(session.date).toLocaleDateString('en-US', {
