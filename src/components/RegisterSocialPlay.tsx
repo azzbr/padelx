@@ -16,9 +16,9 @@ interface MatchEntry {
     player1Id: string;
     player2Id: string;
   };
-  scoreA: number;
-  scoreB: number;
-  winner: 'teamA' | 'teamB';
+  scoreA: number | null;
+  scoreB: number | null;
+  winner: 'teamA' | 'teamB' | null;
 }
 
 interface SessionLeaderboardProps {
@@ -42,6 +42,9 @@ function SessionLeaderboard({ matches, selectedPlayers, players }: SessionLeader
       let sessionPoints = 0;
 
       matches.forEach(match => {
+        // Skip matches that don't have scores yet
+        if (match.scoreA === null || match.scoreB === null || match.winner === null) return;
+
         const isInTeamA = match.teamA.player1Id === playerId || match.teamA.player2Id === playerId;
         const isInTeamB = match.teamB.player1Id === playerId || match.teamB.player2Id === playerId;
 
@@ -147,15 +150,14 @@ export default function RegisterSocialPlay() {
   };
 
   const addMatchEntry = () => {
-    if (matchPlayers.length === 4 && scoreA >= 0 && scoreB >= 0) {
-      const winner = scoreA > scoreB ? 'teamA' : 'teamB';
+    if (matchPlayers.length === 4) {
       const newMatch: MatchEntry = {
         id: `social-${Date.now()}-${matches.length}`,
         teamA: { player1Id: matchPlayers[0], player2Id: matchPlayers[1] },
         teamB: { player1Id: matchPlayers[2], player2Id: matchPlayers[3] },
-        scoreA,
-        scoreB,
-        winner,
+        scoreA: null,
+        scoreB: null,
+        winner: null,
       };
       setMatches(prev => [...prev, newMatch]);
 
@@ -170,9 +172,41 @@ export default function RegisterSocialPlay() {
     setMatches(prev => prev.filter(m => m.id !== matchId));
   };
 
+  const updateMatchScore = (matchId: string, scoreA: number, scoreB: number) => {
+    // Validate scores
+    if (scoreA < 0 || scoreB < 0 || (scoreA === 0 && scoreB === 0)) {
+      toast.error('Invalid scores. Both teams cannot have 0 games.');
+      return;
+    }
+
+    if (scoreA > gamesToWin || scoreB > gamesToWin) {
+      toast.error(`Scores cannot exceed ${gamesToWin} games.`);
+      return;
+    }
+
+    const winner = scoreA > scoreB ? 'teamA' : scoreA < scoreB ? 'teamB' : null;
+    if (winner === null) {
+      toast.error('Scores must determine a winner. No ties allowed.');
+      return;
+    }
+
+    setMatches(prev => prev.map(match =>
+      match.id === matchId
+        ? { ...match, scoreA, scoreB, winner }
+        : match
+    ));
+  };
+
   const submitSession = () => {
     if (selectedPlayers.length < 4 || matches.length === 0) {
       toast.error('Please select at least 4 players and add at least one match');
+      return;
+    }
+
+    // Check if all matches have scores
+    const incompleteMatches = matches.filter(match => match.scoreA === null || match.scoreB === null || match.winner === null);
+    if (incompleteMatches.length > 0) {
+      toast.error('Please enter scores for all matches before submitting');
       return;
     }
 
@@ -190,14 +224,14 @@ export default function RegisterSocialPlay() {
         teamA: {
           player1Id: matchEntry.teamA.player1Id,
           player2Id: matchEntry.teamA.player2Id,
-          gamesWon: matchEntry.scoreA,
+          gamesWon: matchEntry.scoreA!,
         },
         teamB: {
           player1Id: matchEntry.teamB.player1Id,
           player2Id: matchEntry.teamB.player2Id,
-          gamesWon: matchEntry.scoreB,
+          gamesWon: matchEntry.scoreB!,
         },
-        winner: matchEntry.winner,
+        winner: matchEntry.winner!,
         startTime: new Date().toISOString(),
         endTime: new Date().toISOString(),
         history: [], // No live tracking for social play
@@ -448,21 +482,63 @@ export default function RegisterSocialPlay() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Matches ({matches.length})</h2>
             <div className="space-y-3">
               {matches.map(match => (
-                <div key={match.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <div className="flex-1">
+                <div key={match.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="text-sm text-gray-900 dark:text-white">
                       {getPlayerName(match.teamA.player1Id)} + {getPlayerName(match.teamA.player2Id)} vs {getPlayerName(match.teamB.player1Id)} + {getPlayerName(match.teamB.player2Id)}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Score: {match.scoreA}-{match.scoreB} | Winner: {match.winner === 'teamA' ? 'Team A' : 'Team B'}
+                    <button
+                      onClick={() => removeMatch(match.id)}
+                      className="p-1 text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {match.scoreA === null || match.scoreB === null ? (
+                    <div className="text-sm text-orange-600 dark:text-orange-400 mb-2">
+                      Score not entered yet
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      Current Score: {match.scoreA}-{match.scoreB} | Winner: {match.winner === 'teamA' ? 'Team A' : 'Team B'}
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Team A:</span>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={match.scoreA || ''}
+                        onChange={(e) => {
+                          const newScoreA = Number(e.target.value) || 0;
+                          const newScoreB = match.scoreB || 0;
+                          updateMatchScore(match.id, newScoreA, newScoreB);
+                        }}
+                        min="0"
+                        max={gamesToWin}
+                        className="w-16 p-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-center"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Team B:</span>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={match.scoreB || ''}
+                        onChange={(e) => {
+                          const newScoreB = Number(e.target.value) || 0;
+                          const newScoreA = match.scoreA || 0;
+                          updateMatchScore(match.id, newScoreA, newScoreB);
+                        }}
+                        min="0"
+                        max={gamesToWin}
+                        className="w-16 p-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-center"
+                      />
                     </div>
                   </div>
-                  <button
-                    onClick={() => removeMatch(match.id)}
-                    className="p-1 text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               ))}
             </div>
