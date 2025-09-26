@@ -18,7 +18,7 @@ interface MatchEntry {
   };
   scoreA: number | null;
   scoreB: number | null;
-  winner: 'teamA' | 'teamB' | null;
+  winner: 'teamA' | 'teamB' | 'tie' | null;
 }
 
 interface SessionLeaderboardProps {
@@ -58,8 +58,14 @@ function SessionLeaderboard({ matches, selectedPlayers, players }: SessionLeader
           sessionGamesWon += gamesWon;
           sessionGamesLost += gamesLost;
 
-          // Calculate points using the same logic as calculations.ts
-          const points = isWinner ? 10 : (gamesWon === 3 && gamesLost === 4) ? 2 : (gamesWon === 2 && gamesLost === 4) ? 1 : 0;
+          // Calculate points using 3-1-0 system: 3 for win, 1 for tie, 0 for loss
+          let points = 0;
+          if (match.winner === 'tie') {
+            points = 1; // Tie gets 1 point
+          } else if (isWinner) {
+            points = 3; // Win gets 3 points
+          }
+          // Loss gets 0 points
           sessionPoints += points;
         }
       });
@@ -186,11 +192,8 @@ export default function RegisterSocialPlay() {
       return;
     }
 
-    const winner = scoreA > scoreB ? 'teamA' : scoreA < scoreB ? 'teamB' : null;
-    if (winner === null) {
-      toast.error('Scores must determine a winner. No ties allowed.');
-      return;
-    }
+    // Allow ties - determine winner based on scores
+    const winner = scoreA > scoreB ? 'teamA' : scoreA < scoreB ? 'teamB' : 'tie';
 
     setMatches(prev => prev.map(match =>
       match.id === matchId
@@ -268,50 +271,42 @@ export default function RegisterSocialPlay() {
       let errorCount = 0;
 
       lines.forEach(line => {
-        // Look for lines with scores in multiple formats:
-        // 1. "1. Team vs Team: 6-4" (colon + dash)
-        // 2. "1. Team vs Team 6-4" (dash only)
-        // 3. "1. Team vs Team 64" (compact two digits)
-        const scoreMatch = line.match(/^(\d+)\.\s*([^:\d]+)(?::?\s*)?(\d+)(?:-)?(\d?)$/);
+        // Look for lines with scores using match numbers:
+        // 1. "1. 6-4" (just number and score)
+        // 2. "1. Team vs Team 6-4" (with teams, but we ignore teams)
+        // 3. "1. 64" (compact format)
+        // 4. "1: 6-4" (colon instead of period)
+        const scoreMatch = line.match(/^(\d+)[\.:]\s*(?:\S.*?\s+)?(\d+)(?:-)?(\d?)$/);
         if (scoreMatch) {
-          const [, matchIndex, teamsText, scorePart1, scorePart2] = scoreMatch;
+          const [, matchIndex, scorePart1, scorePart2] = scoreMatch;
           const index = parseInt(matchIndex) - 1;
 
           if (index >= 0 && index < matches.length) {
-            const match = matches[index];
-            const expectedTeams = `${getPlayerName(match.teamA.player1Id)} + ${getPlayerName(match.teamA.player2Id)} vs ${getPlayerName(match.teamB.player1Id)} + ${getPlayerName(match.teamB.player2Id)}`;
+            let scoreA: number, scoreB: number;
 
-            // Simple validation - check if the teams match (case insensitive, ignore extra spaces)
-            const normalizedExpected = expectedTeams.toLowerCase().replace(/\s+/g, ' ').trim();
-            const normalizedActual = teamsText.toLowerCase().replace(/\s+/g, ' ').trim();
-
-            if (normalizedExpected === normalizedActual) {
-              let scoreA: number, scoreB: number;
-
-              // Handle different score formats
-              if (scorePart2) {
-                // Format: "64" -> 6 and 4, or "6-4" -> 6 and 4
-                scoreA = parseInt(scorePart1);
-                scoreB = parseInt(scorePart2);
-              } else {
-                // Format: "64" as single number -> split into digits
-                const scoreStr = scorePart1.toString();
-                if (scoreStr.length === 2) {
-                  scoreA = parseInt(scoreStr[0]);
-                  scoreB = parseInt(scoreStr[1]);
-                } else {
-                  console.warn(`Invalid score format for match ${matchIndex}: "${scorePart1}"`);
-                  errorCount++;
-                  return;
-                }
-              }
-
-              updateMatchScore(match.id, scoreA, scoreB);
-              successCount++;
+            // Handle different score formats
+            if (scorePart2) {
+              // Format: "6-4" -> 6 and 4
+              scoreA = parseInt(scorePart1);
+              scoreB = parseInt(scorePart2);
             } else {
-              console.warn(`Team mismatch for match ${matchIndex}: expected "${expectedTeams}", got "${teamsText}"`);
-              errorCount++;
+              // Format: "64" as single number -> split into digits
+              const scoreStr = scorePart1.toString();
+              if (scoreStr.length === 2) {
+                scoreA = parseInt(scoreStr[0]);
+                scoreB = parseInt(scoreStr[1]);
+              } else {
+                console.warn(`Invalid score format for match ${matchIndex}: "${scorePart1}"`);
+                errorCount++;
+                return;
+              }
             }
+
+            updateMatchScore(matches[index].id, scoreA, scoreB);
+            successCount++;
+          } else {
+            console.warn(`Match ${matchIndex} not found in current matches list`);
+            errorCount++;
           }
         }
       });
@@ -320,7 +315,7 @@ export default function RegisterSocialPlay() {
         toast.success(`Successfully imported ${successCount} match scores!`);
       }
       if (errorCount > 0) {
-        toast.warning(`${errorCount} matches had team mismatches and were skipped.`);
+        toast.warning(`${errorCount} matches could not be imported (invalid format or match not found).`);
       }
       if (successCount === 0 && errorCount === 0) {
         toast.error('No valid scores found in the pasted text. Make sure the format matches the exported schedule.');
@@ -385,8 +380,10 @@ export default function RegisterSocialPlay() {
     // Calculate all player updates using original player data
     const playerUpdates = new Map<string, Player>();
 
-    // First, update stats for all matches using original player data
+    // First, calculate all stat changes based on original player data
     matchObjects.forEach(match => {
+      const isTie = match.winner === 'tie';
+
       // Update stats for team A players
       [match.teamA.player1Id, match.teamA.player2Id].forEach(playerId => {
         const originalPlayer = state.players.find(p => p.id === playerId);
@@ -396,7 +393,8 @@ export default function RegisterSocialPlay() {
             match.teamA.gamesWon,
             match.teamB.gamesWon,
             match.winner === 'teamA',
-            sessionDate
+            sessionDate,
+            isTie
           );
           playerUpdates.set(playerId, updatedPlayer);
         }
@@ -411,19 +409,29 @@ export default function RegisterSocialPlay() {
             match.teamB.gamesWon,
             match.teamA.gamesWon,
             match.winner === 'teamB',
-            sessionDate
+            sessionDate,
+            isTie
           );
           playerUpdates.set(playerId, updatedPlayer);
         }
       });
     });
 
-    // Then, update skills for all matches using the stat-updated players
+    // Then, calculate all skill adjustments based on original player data (not the stat-updated data)
     matchObjects.forEach(match => {
-      const currentPlayers = Array.from(playerUpdates.values());
-      const skillUpdatedPlayers = updateAllPlayersSkillsAfterMatch(currentPlayers, match);
+      const skillUpdatedPlayers = updateAllPlayersSkillsAfterMatch(state.players, match);
       skillUpdatedPlayers.forEach(player => {
-        playerUpdates.set(player.id, player);
+        const existingPlayer = playerUpdates.get(player.id);
+        if (existingPlayer) {
+          // Merge skill changes with stat changes
+          playerUpdates.set(player.id, {
+            ...existingPlayer,
+            skill: player.skill
+          });
+        } else {
+          // This shouldn't happen, but just in case
+          playerUpdates.set(player.id, player);
+        }
       });
     });
 
@@ -670,7 +678,7 @@ export default function RegisterSocialPlay() {
                       </div>
                     ) : (
                       <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                        Current Score: {match.scoreA}-{match.scoreB} | Winner: {match.winner === 'teamA' ? 'Team A' : 'Team B'}
+                        Current Score: {match.scoreA}-{match.scoreB} | Winner: {match.winner === 'teamA' ? 'Team A' : match.winner === 'teamB' ? 'Team B' : 'Tie'}
                       </div>
                     )}
 

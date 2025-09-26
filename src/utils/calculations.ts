@@ -30,10 +30,17 @@ export function updatePlayerStats(
   gamesWon: number,
   gamesLost: number,
   isWinner: boolean,
-  matchDate: string
+  matchDate: string,
+  isTie: boolean = false
 ): Player {
-  const points = calculateMatchPoints(gamesWon, gamesLost, isWinner);
-  
+  let points = 0;
+  if (isTie) {
+    points = 1; // Tie gets 1 point
+  } else if (isWinner) {
+    points = 3; // Win gets 3 points
+  }
+  // Loss gets 0 points
+
   const updatedStats = {
     ...player.stats,
     matchesPlayed: player.stats.matchesPlayed + 1,
@@ -44,18 +51,21 @@ export function updatePlayerStats(
     points: player.stats.points + points,
     lastPlayed: matchDate,
   };
-  
+
   // Update current streak
   if (isWinner) {
-    updatedStats.currentStreak = player.stats.currentStreak >= 0 
-      ? player.stats.currentStreak + 1 
+    updatedStats.currentStreak = player.stats.currentStreak >= 0
+      ? player.stats.currentStreak + 1
       : 1;
+  } else if (isTie) {
+    // Ties don't break streaks but don't extend them either
+    // Keep current streak as is
   } else {
-    updatedStats.currentStreak = player.stats.currentStreak <= 0 
-      ? player.stats.currentStreak - 1 
+    updatedStats.currentStreak = player.stats.currentStreak <= 0
+      ? player.stats.currentStreak - 1
       : -1;
   }
-  
+
   return {
     ...player,
     stats: updatedStats,
@@ -276,13 +286,18 @@ export function updateAllPlayersSkillsAfterMatch(
   const teamAPlayer2 = players.find(p => p.id === match.teamA.player2Id);
   const teamBPlayer1 = players.find(p => p.id === match.teamB.player1Id);
   const teamBPlayer2 = players.find(p => p.id === match.teamB.player2Id);
-  
+
   if (!teamAPlayer1 || !teamAPlayer2 || !teamBPlayer1 || !teamBPlayer2) {
     return players; // Return unchanged if any player not found
   }
-  
-  const teamAWon = match.teamA.gamesWon > match.teamB.gamesWon;
-  
+
+  // Handle ties - no skill changes for ties
+  if (match.winner === 'tie') {
+    return players; // Return unchanged for tie matches
+  }
+
+  const teamAWon = match.winner === 'teamA';
+
   return players.map(player => {
     if (player.id === match.teamA.player1Id) {
       return updatePlayerSkillRating(

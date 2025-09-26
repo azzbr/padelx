@@ -34,7 +34,7 @@ export interface Match {
     player2Id: string;
     gamesWon: number;
   };
-  winner?: 'teamA' | 'teamB';
+  winner?: 'teamA' | 'teamB' | 'tie';
   startTime?: string;
   endTime?: string;
   history: GamePoint[]; // for undo functionality
