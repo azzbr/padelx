@@ -125,6 +125,8 @@ export default function RegisterSocialPlay() {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [gamesToWin, setGamesToWin] = useState<number>(state.settings.gamesToWin);
   const [matches, setMatches] = useState<MatchEntry[]>([]);
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
+  const [tempScores, setTempScores] = useState<{ [matchId: string]: { scoreA: number; scoreB: number } }>({});
 
   // For adding new match
   const [matchPlayers, setMatchPlayers] = useState<string[]>([]);
@@ -195,6 +197,42 @@ export default function RegisterSocialPlay() {
         ? { ...match, scoreA, scoreB, winner }
         : match
     ));
+  };
+
+  const startEditingMatch = (matchId: string) => {
+    const match = matches.find(m => m.id === matchId);
+    if (match) {
+      setTempScores(prev => ({
+        ...prev,
+        [matchId]: {
+          scoreA: match.scoreA || 0,
+          scoreB: match.scoreB || 0
+        }
+      }));
+      setEditingMatchId(matchId);
+    }
+  };
+
+  const saveMatchEdits = (matchId: string) => {
+    const tempScore = tempScores[matchId];
+    if (tempScore) {
+      updateMatchScore(matchId, tempScore.scoreA, tempScore.scoreB);
+      setEditingMatchId(null);
+      setTempScores(prev => {
+        const newTemp = { ...prev };
+        delete newTemp[matchId];
+        return newTemp;
+      });
+    }
+  };
+
+  const cancelMatchEdits = (matchId: string) => {
+    setEditingMatchId(null);
+    setTempScores(prev => {
+      const newTemp = { ...prev };
+      delete newTemp[matchId];
+      return newTemp;
+    });
   };
 
   const exportMatchesForWhatsApp = () => {
@@ -594,66 +632,124 @@ export default function RegisterSocialPlay() {
               </div>
             </div>
             <div className="space-y-3">
-              {matches.map(match => (
-                <div key={match.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-sm text-gray-900 dark:text-white">
-                      {getPlayerName(match.teamA.player1Id)} + {getPlayerName(match.teamA.player2Id)} vs {getPlayerName(match.teamB.player1Id)} + {getPlayerName(match.teamB.player2Id)}
-                    </div>
-                    <button
-                      onClick={() => removeMatch(match.id)}
-                      className="p-1 text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+              {matches.map(match => {
+                const isEditing = editingMatchId === match.id;
+                const tempScore = tempScores[match.id];
 
-                  {match.scoreA === null || match.scoreB === null ? (
-                    <div className="text-sm text-orange-600 dark:text-orange-400 mb-2">
-                      Score not entered yet
+                return (
+                  <div key={match.id} className={`p-4 rounded-lg ${isEditing ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800' : 'bg-gray-50 dark:bg-gray-700'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm text-gray-900 dark:text-white">
+                        {getPlayerName(match.teamA.player1Id)} + {getPlayerName(match.teamA.player2Id)} vs {getPlayerName(match.teamB.player1Id)} + {getPlayerName(match.teamB.player2Id)}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {!isEditing && match.scoreA !== null && match.scoreB !== null && (
+                          <button
+                            onClick={() => startEditingMatch(match.id)}
+                            className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <button
+                          onClick={() => removeMatch(match.id)}
+                          className="p-1 text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      Current Score: {match.scoreA}-{match.scoreB} | Winner: {match.winner === 'teamA' ? 'Team A' : 'Team B'}
-                    </div>
-                  )}
 
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Team A:</span>
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={match.scoreA || ''}
-                        onChange={(e) => {
-                          const newScoreA = Number(e.target.value) || 0;
-                          const newScoreB = match.scoreB || 0;
-                          updateMatchScore(match.id, newScoreA, newScoreB);
-                        }}
-                        min="0"
-                        max={gamesToWin}
-                        className="w-16 p-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-center"
-                      />
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Team B:</span>
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={match.scoreB || ''}
-                        onChange={(e) => {
-                          const newScoreB = Number(e.target.value) || 0;
-                          const newScoreA = match.scoreA || 0;
-                          updateMatchScore(match.id, newScoreA, newScoreB);
-                        }}
-                        min="0"
-                        max={gamesToWin}
-                        className="w-16 p-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-center"
-                      />
+                    {isEditing ? (
+                      <div className="text-sm text-blue-600 dark:text-blue-400 mb-2">
+                        Editing scores...
+                      </div>
+                    ) : match.scoreA === null || match.scoreB === null ? (
+                      <div className="text-sm text-orange-600 dark:text-orange-400 mb-2">
+                        Score not entered yet
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        Current Score: {match.scoreA}-{match.scoreB} | Winner: {match.winner === 'teamA' ? 'Team A' : 'Team B'}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Team A:</span>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={isEditing ? tempScore?.scoreA || '' : match.scoreA || ''}
+                            onChange={(e) => {
+                              const newScoreA = Number(e.target.value) || 0;
+                              if (isEditing) {
+                                setTempScores(prev => ({
+                                  ...prev,
+                                  [match.id]: {
+                                    scoreA: newScoreA,
+                                    scoreB: tempScore?.scoreB || 0
+                                  }
+                                }));
+                              } else {
+                                const newScoreB = match.scoreB || 0;
+                                updateMatchScore(match.id, newScoreA, newScoreB);
+                              }
+                            }}
+                            min="0"
+                            max={gamesToWin}
+                            className="w-16 p-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-center"
+                          />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Team B:</span>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={isEditing ? tempScore?.scoreB || '' : match.scoreB || ''}
+                            onChange={(e) => {
+                              const newScoreB = Number(e.target.value) || 0;
+                              if (isEditing) {
+                                setTempScores(prev => ({
+                                  ...prev,
+                                  [match.id]: {
+                                    scoreA: tempScore?.scoreA || 0,
+                                    scoreB: newScoreB
+                                  }
+                                }));
+                              } else {
+                                const newScoreA = match.scoreA || 0;
+                                updateMatchScore(match.id, newScoreA, newScoreB);
+                              }
+                            }}
+                            min="0"
+                            max={gamesToWin}
+                            className="w-16 p-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-center"
+                          />
+                        </div>
+                      </div>
+
+                      {isEditing && (
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => saveMatchEdits(match.id)}
+                            className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => cancelMatchEdits(match.id)}
+                            className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
