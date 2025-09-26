@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp, useAppActions } from '../context/AppContext';
 import { Player, Match, Session } from '../types';
 import { updatePlayerStats, updateAllPlayersSkillsAfterMatch, rankPlayers } from '../utils/calculations';
-import { Save, Users, Trophy, Plus, Trash2 } from 'lucide-react';
+import { Save, Users, Trophy, Plus, Trash2, Copy, Download } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 interface MatchEntry {
@@ -195,6 +195,78 @@ export default function RegisterSocialPlay() {
         ? { ...match, scoreA, scoreB, winner }
         : match
     ));
+  };
+
+  const exportMatchesForWhatsApp = () => {
+    const matchSchedule = matches.map((match, index) => {
+      const teamA = `${getPlayerName(match.teamA.player1Id)} + ${getPlayerName(match.teamA.player2Id)}`;
+      const teamB = `${getPlayerName(match.teamB.player1Id)} + ${getPlayerName(match.teamB.player2Id)}`;
+      return `${index + 1}. ${teamA} vs ${teamB}`;
+    }).join('\n');
+
+    const fullText = `🏓 Padel Match Schedule 🏓\n\n${matchSchedule}\n\nAdd scores like: 6-4`;
+
+    navigator.clipboard.writeText(fullText).then(() => {
+      toast.success('Match schedule copied to clipboard! Paste in WhatsApp.');
+    }).catch(() => {
+      // Fallback for browsers that don't support clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = fullText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      toast.success('Match schedule copied to clipboard! Paste in WhatsApp.');
+    });
+  };
+
+  const importScoresFromWhatsApp = () => {
+    const inputText = prompt('Paste the match schedule with scores from WhatsApp:');
+    if (!inputText) return;
+
+    try {
+      const lines = inputText.split('\n').map(line => line.trim()).filter(line => line);
+      let successCount = 0;
+      let errorCount = 0;
+
+      lines.forEach(line => {
+        // Look for lines with scores like "1. Player1 + Player2 vs Player3 + Player4: 6-4"
+        const scoreMatch = line.match(/^(\d+)\.\s*([^:]+):\s*(\d+)-(\d+)$/);
+        if (scoreMatch) {
+          const [, matchIndex, teamsText, scoreA, scoreB] = scoreMatch;
+          const index = parseInt(matchIndex) - 1;
+
+          if (index >= 0 && index < matches.length) {
+            const match = matches[index];
+            const expectedTeams = `${getPlayerName(match.teamA.player1Id)} + ${getPlayerName(match.teamA.player2Id)} vs ${getPlayerName(match.teamB.player1Id)} + ${getPlayerName(match.teamB.player2Id)}`;
+
+            // Simple validation - check if the teams match (case insensitive, ignore extra spaces)
+            const normalizedExpected = expectedTeams.toLowerCase().replace(/\s+/g, ' ').trim();
+            const normalizedActual = teamsText.toLowerCase().replace(/\s+/g, ' ').trim();
+
+            if (normalizedExpected === normalizedActual) {
+              updateMatchScore(match.id, parseInt(scoreA), parseInt(scoreB));
+              successCount++;
+            } else {
+              console.warn(`Team mismatch for match ${matchIndex}: expected "${expectedTeams}", got "${teamsText}"`);
+              errorCount++;
+            }
+          }
+        }
+      });
+
+      if (successCount > 0) {
+        toast.success(`Successfully imported ${successCount} match scores!`);
+      }
+      if (errorCount > 0) {
+        toast.warning(`${errorCount} matches had team mismatches and were skipped.`);
+      }
+      if (successCount === 0 && errorCount === 0) {
+        toast.error('No valid scores found in the pasted text. Make sure the format matches the exported schedule.');
+      }
+    } catch (error) {
+      toast.error('Failed to parse the pasted text. Please check the format.');
+    }
   };
 
   const submitSession = () => {
@@ -479,7 +551,25 @@ export default function RegisterSocialPlay() {
         {/* Match List */}
         {matches.length > 0 && (
           <div className="card p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Matches ({matches.length})</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Matches ({matches.length})</h2>
+              <div className="flex space-x-2">
+                <button
+                  onClick={exportMatchesForWhatsApp}
+                  className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 flex items-center"
+                >
+                  <Copy className="w-4 h-4 mr-1" />
+                  Export for WhatsApp
+                </button>
+                <button
+                  onClick={importScoresFromWhatsApp}
+                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  Import Scores
+                </button>
+              </div>
+            </div>
             <div className="space-y-3">
               {matches.map(match => (
                 <div key={match.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
