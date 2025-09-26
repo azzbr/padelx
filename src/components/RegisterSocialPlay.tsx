@@ -230,10 +230,13 @@ export default function RegisterSocialPlay() {
       let errorCount = 0;
 
       lines.forEach(line => {
-        // Look for lines with scores like "1. Player1 + Player2 vs Player3 + Player4: 6-4"
-        const scoreMatch = line.match(/^(\d+)\.\s*([^:]+):\s*(\d+)-(\d+)$/);
+        // Look for lines with scores in multiple formats:
+        // 1. "1. Team vs Team: 6-4" (colon + dash)
+        // 2. "1. Team vs Team 6-4" (dash only)
+        // 3. "1. Team vs Team 64" (compact two digits)
+        const scoreMatch = line.match(/^(\d+)\.\s*([^:\d]+)(?::?\s*)?(\d+)(?:-)?(\d?)$/);
         if (scoreMatch) {
-          const [, matchIndex, teamsText, scoreA, scoreB] = scoreMatch;
+          const [, matchIndex, teamsText, scorePart1, scorePart2] = scoreMatch;
           const index = parseInt(matchIndex) - 1;
 
           if (index >= 0 && index < matches.length) {
@@ -245,7 +248,27 @@ export default function RegisterSocialPlay() {
             const normalizedActual = teamsText.toLowerCase().replace(/\s+/g, ' ').trim();
 
             if (normalizedExpected === normalizedActual) {
-              updateMatchScore(match.id, parseInt(scoreA), parseInt(scoreB));
+              let scoreA: number, scoreB: number;
+
+              // Handle different score formats
+              if (scorePart2) {
+                // Format: "64" -> 6 and 4, or "6-4" -> 6 and 4
+                scoreA = parseInt(scorePart1);
+                scoreB = parseInt(scorePart2);
+              } else {
+                // Format: "64" as single number -> split into digits
+                const scoreStr = scorePart1.toString();
+                if (scoreStr.length === 2) {
+                  scoreA = parseInt(scoreStr[0]);
+                  scoreB = parseInt(scoreStr[1]);
+                } else {
+                  console.warn(`Invalid score format for match ${matchIndex}: "${scorePart1}"`);
+                  errorCount++;
+                  return;
+                }
+              }
+
+              updateMatchScore(match.id, scoreA, scoreB);
               successCount++;
             } else {
               console.warn(`Team mismatch for match ${matchIndex}: expected "${expectedTeams}", got "${teamsText}"`);
