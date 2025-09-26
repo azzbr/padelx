@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Player } from '../types';
-import { rankPlayers, calculateWinRate, formatStreak } from '../utils/calculations';
+import { rankPlayers, calculateWinRate, formatStreak, calculatePlayerStatsForPeriod } from '../utils/calculations';
 
 interface PlayerWithRank extends Player {
   rank: number;
@@ -42,11 +42,13 @@ const Leaderboard: React.FC = () => {
 
     // Filter by time period for stats calculation
     if (timePeriod === 'last30days') {
-      filteredPlayers = state.players.map(player => {
-        // For last 30 days, we'd need to recalculate stats from matches in that period
-        // For now, we'll use the existing stats as a simplified version
-        return player;
-      });
+      // Calculate stats for the last 30 days
+      filteredPlayers = calculatePlayerStatsForPeriod(
+        state.players,
+        state.matches,
+        thirtyDaysAgo,
+        now
+      );
     }
 
     const rankedPlayers = rankPlayers(filteredPlayers);
@@ -71,7 +73,7 @@ const Leaderboard: React.FC = () => {
         recentPoints,
       } as PlayerWithRank;
     });
-  }, [state.players, timePeriod]);
+  }, [state.players, state.matches, timePeriod]);
 
   // Sort players based on selected criteria
   const sortedPlayers = useMemo(() => {

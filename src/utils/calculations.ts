@@ -263,6 +263,140 @@ export function updatePlayerSkillRating(
   };
 }
 
+// Calculate player stats for a specific time period
+export function calculatePlayerStatsForPeriod(
+  players: Player[],
+  matches: Match[],
+  startDate: Date,
+  endDate: Date
+): Player[] {
+  // Create a map to store period-specific stats for each player
+  const periodStats = new Map<string, {
+    matchesPlayed: number;
+    matchesWon: number;
+    matchesLost: number;
+    gamesWon: number;
+    gamesLost: number;
+    points: number;
+    lastPlayed?: string;
+    currentStreak: number;
+  }>();
+
+  // Filter matches within the date range
+  const periodMatches = matches.filter(match => {
+    if (!match.endTime) return false;
+    const matchDate = new Date(match.endTime);
+    return matchDate >= startDate && matchDate <= endDate;
+  });
+
+  // Calculate stats for each match in the period
+  periodMatches.forEach(match => {
+    const isTie = match.winner === 'tie';
+
+    // Process team A players
+    [match.teamA.player1Id, match.teamA.player2Id].forEach(playerId => {
+      if (!periodStats.has(playerId)) {
+        periodStats.set(playerId, {
+          matchesPlayed: 0,
+          matchesWon: 0,
+          matchesLost: 0,
+          gamesWon: 0,
+          gamesLost: 0,
+          points: 0,
+          currentStreak: 0
+        });
+      }
+
+      const stats = periodStats.get(playerId)!;
+      const isWinner = match.winner === 'teamA';
+
+      stats.matchesPlayed += 1;
+      if (isWinner) {
+        stats.matchesWon += 1;
+      } else if (!isTie) {
+        stats.matchesLost += 1;
+      }
+
+      stats.gamesWon += match.teamA.gamesWon;
+      stats.gamesLost += match.teamB.gamesWon;
+
+      // Points calculation: 3 for win, 1 for tie, 0 for loss
+      if (isWinner) {
+        stats.points += 3;
+      } else if (isTie) {
+        stats.points += 1;
+      }
+
+      stats.lastPlayed = match.endTime;
+    });
+
+    // Process team B players
+    [match.teamB.player1Id, match.teamB.player2Id].forEach(playerId => {
+      if (!periodStats.has(playerId)) {
+        periodStats.set(playerId, {
+          matchesPlayed: 0,
+          matchesWon: 0,
+          matchesLost: 0,
+          gamesWon: 0,
+          gamesLost: 0,
+          points: 0,
+          currentStreak: 0
+        });
+      }
+
+      const stats = periodStats.get(playerId)!;
+      const isWinner = match.winner === 'teamB';
+
+      stats.matchesPlayed += 1;
+      if (isWinner) {
+        stats.matchesWon += 1;
+      } else if (!isTie) {
+        stats.matchesLost += 1;
+      }
+
+      stats.gamesWon += match.teamB.gamesWon;
+      stats.gamesLost += match.teamA.gamesWon;
+
+      // Points calculation: 3 for win, 1 for tie, 0 for loss
+      if (isWinner) {
+        stats.points += 3;
+      } else if (isTie) {
+        stats.points += 1;
+      }
+
+      stats.lastPlayed = match.endTime;
+    });
+  });
+
+  // Return players with period-specific stats
+  return players.map(player => {
+    const periodStat = periodStats.get(player.id);
+    if (periodStat) {
+      return {
+        ...player,
+        stats: {
+          ...player.stats,
+          ...periodStat
+        }
+      };
+    }
+    // Player has no matches in this period, return with zeroed stats
+    return {
+      ...player,
+      stats: {
+        ...player.stats,
+        matchesPlayed: 0,
+        matchesWon: 0,
+        matchesLost: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        points: 0,
+        currentStreak: 0
+      }
+    };
+  });
+}
+
 // Batch update all players' skills after a match
 export function updateAllPlayersSkillsAfterMatch(
   players: Player[],
