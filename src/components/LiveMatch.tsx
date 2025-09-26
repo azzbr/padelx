@@ -222,16 +222,12 @@ const LiveMatch: React.FC = () => {
         const gamesWon = isWinner ? winningTeam.gamesWon : losingTeam.gamesWon;
         const gamesLost = isWinner ? losingTeam.gamesWon : winningTeam.gamesWon;
         
-        // Calculate points based on performance
+        // Calculate points using 3-1-0 system: 3 for win, 1 for tie, 0 for loss
         let points = 0;
         if (isWinner) {
-          points = 10; // Win: +10 points
-        } else {
-          // Loss points based on closeness
-          if (gamesWon === 3) points = 2; // Close loss (3-4): +2 points
-          else if (gamesWon === 2) points = 1; // Regular loss (2-4): +1 point
-          else points = 0; // Bad loss (0-4 or 1-4): 0 points
+          points = 3; // Win: +3 points
         }
+        // Loss: 0 points (no partial credit for closeness)
 
         return {
           ...player,
@@ -308,16 +304,12 @@ const LiveMatch: React.FC = () => {
             const gamesWon = isWinner ? winningTeam.gamesWon : losingTeam.gamesWon;
             const gamesLost = isWinner ? losingTeam.gamesWon : winningTeam.gamesWon;
 
-            // Calculate points based on performance
+            // Calculate points using 3-1-0 system: 3 for win, 1 for tie, 0 for loss
             let points = 0;
             if (isWinner) {
-              points = 10; // Win: +10 points
-            } else {
-              // Loss points based on closeness
-              if (gamesWon === 3) points = 2; // Close loss (3-4): +2 points
-              else if (gamesWon === 2) points = 1; // Regular loss (2-4): +1 point
-              else points = 0; // Bad loss (0-4 or 1-4): 0 points
+              points = 3; // Win: +3 points
             }
+            // Loss: 0 points (no partial credit for closeness)
 
             player = {
               ...player,

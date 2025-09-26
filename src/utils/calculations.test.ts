@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import {
-  calculateMatchPoints,
   calculateWinRate,
   calculateGamesWinRate,
   updatePlayerStats,
@@ -8,26 +7,6 @@ import {
   formatStreak
 } from './calculations'
 import { Player } from '../types'
-
-describe('calculateMatchPoints', () => {
-  it('returns 10 points for a win', () => {
-    expect(calculateMatchPoints(4, 2, true)).toBe(10)
-    expect(calculateMatchPoints(4, 0, true)).toBe(10)
-  })
-
-  it('returns 2 points for a close loss (3-4)', () => {
-    expect(calculateMatchPoints(3, 4, false)).toBe(2)
-  })
-
-  it('returns 1 point for a regular loss (2-4)', () => {
-    expect(calculateMatchPoints(2, 4, false)).toBe(1)
-  })
-
-  it('returns 0 points for a bad loss', () => {
-    expect(calculateMatchPoints(0, 4, false)).toBe(0)
-    expect(calculateMatchPoints(1, 4, false)).toBe(0)
-  })
-})
 
 describe('calculateWinRate', () => {
   it('calculates win rate correctly', () => {
@@ -80,7 +59,7 @@ describe('updatePlayerStats', () => {
     expect(result.stats.matchesLost).toBe(2)
     expect(result.stats.gamesWon).toBe(19)
     expect(result.stats.gamesLost).toBe(14)
-    expect(result.stats.points).toBe(45) // 35 + 10
+    expect(result.stats.points).toBe(38) // 35 + 3
     expect(result.stats.currentStreak).toBe(2)
     expect(result.stats.lastPlayed).toBe('2024-01-02')
   })
@@ -93,8 +72,20 @@ describe('updatePlayerStats', () => {
     expect(result.stats.matchesLost).toBe(3)
     expect(result.stats.gamesWon).toBe(17)
     expect(result.stats.gamesLost).toBe(16)
-    expect(result.stats.points).toBe(36) // 35 + 1
+    expect(result.stats.points).toBe(35) // 35 + 0
     expect(result.stats.currentStreak).toBe(-1)
+  })
+
+  it('updates stats correctly for a tie', () => {
+    const result = updatePlayerStats(mockPlayer, 3, 3, false, '2024-01-02', true)
+
+    expect(result.stats.matchesPlayed).toBe(6)
+    expect(result.stats.matchesWon).toBe(3) // No additional win
+    expect(result.stats.matchesLost).toBe(2) // No additional loss
+    expect(result.stats.gamesWon).toBe(18)
+    expect(result.stats.gamesLost).toBe(15)
+    expect(result.stats.points).toBe(36) // 35 + 1
+    expect(result.stats.currentStreak).toBe(1) // Streak unchanged
   })
 
   it('handles streak changes correctly', () => {

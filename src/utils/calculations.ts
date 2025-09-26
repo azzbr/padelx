@@ -8,21 +8,7 @@ const POINTS = {
   BAD_LOSS: 0, // Lost 0-4 or 1-4
 } as const;
 
-// Calculate points for a match result
-export function calculateMatchPoints(gamesWon: number, gamesLost: number, isWinner: boolean): number {
-  if (isWinner) {
-    return POINTS.WIN;
-  }
-  
-  // Loss scenarios
-  if (gamesWon === 3 && gamesLost === 4) {
-    return POINTS.CLOSE_LOSS;
-  } else if (gamesWon === 2 && gamesLost === 4) {
-    return POINTS.REGULAR_LOSS;
-  } else {
-    return POINTS.BAD_LOSS; // 0-4 or 1-4 loss
-  }
-}
+
 
 // Update player statistics after a match
 export function updatePlayerStats(
@@ -45,7 +31,7 @@ export function updatePlayerStats(
     ...player.stats,
     matchesPlayed: player.stats.matchesPlayed + 1,
     matchesWon: isWinner ? player.stats.matchesWon + 1 : player.stats.matchesWon,
-    matchesLost: isWinner ? player.stats.matchesLost : player.stats.matchesLost + 1,
+    matchesLost: isWinner ? player.stats.matchesLost : (isTie ? player.stats.matchesLost : player.stats.matchesLost + 1),
     gamesWon: player.stats.gamesWon + gamesWon,
     gamesLost: player.stats.gamesLost + gamesLost,
     points: player.stats.points + points,

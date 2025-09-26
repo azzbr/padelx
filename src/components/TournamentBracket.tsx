@@ -367,16 +367,12 @@ export default function TournamentBracket() {
         const gamesWon = isWinner ? winningTeam.gamesWon : losingTeam.gamesWon;
         const gamesLost = isWinner ? losingTeam.gamesWon : winningTeam.gamesWon;
 
-        // Calculate points based on performance (tournament matches give bonus points)
+        // Calculate points using 3-1-0 system with tournament bonus
         let points = 0;
         if (isWinner) {
-          points = 15; // Tournament win: +15 points (bonus over regular matches)
-        } else {
-          // Loss points based on closeness
-          if (gamesWon === 3) points = 3; // Close loss (3-4): +3 points
-          else if (gamesWon === 2) points = 2; // Regular loss (2-4): +2 point
-          else points = 1; // Bad loss (0-4 or 1-4): +1 point
+          points = 3 + 2; // Tournament win: 3 points + 2 bonus = 5 points
         }
+        // Loss: 0 points (no partial credit for closeness)
 
         // Calculate skill adjustment based on win/loss and opponent strength
         let skillAdjustment = 0;
